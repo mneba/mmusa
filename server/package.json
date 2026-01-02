@@ -1,0 +1,20 @@
+{
+  "name": "pool-leads-ws-server",
+  "version": "2.0.0",
+  "description": "WebSocket Server for Pool Leads AI Agent - Twilio + OpenAI Realtime",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "fastify": "^4.25.0",
+    "@fastify/formbody": "^7.4.0",
+    "@fastify/websocket": "^8.3.1",
+    "ws": "^8.16.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
