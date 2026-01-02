@@ -3,29 +3,22 @@
   "version": "2.0.0",
   "private": true,
   "description": "AI Voice Agent for Pool Installation Leads - Twilio + OpenAI Realtime API",
-  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "test:compliance": "node scripts/test-compliance.js"
+    "lint": "next lint"
   },
   "dependencies": {
-    "next": "14.2.21",
+    "next": "14.2.28",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "twilio": "^4.23.0",
-    "ws": "^8.16.0",
-    "lucide-react": "^0.294.0"
+    "twilio": "^4.23.0"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
-    "@types/react": "^18.2.0",
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.32",
-    "tailwindcss": "^3.3.6",
-    "typescript": "^5.3.0"
+    "tailwindcss": "^3.4.0"
   },
   "engines": {
     "node": ">=18.0.0"
