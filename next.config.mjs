@@ -1,10 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Enable experimental features for WebSocket support
-  experimental: {
-    serverActions: true,
-  },
   // Environment variables that should be available on the client
   env: {
     NEXT_PUBLIC_APP_URL: process.env.VERCEL_URL 
