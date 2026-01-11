@@ -63,11 +63,15 @@ export async function POST(request) {
     // Inicializar cliente Twilio
     const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
-    // Fazer a chamada
+    // Idioma do lead (padrão: en para inglês)
+    const lang = lead.language || 'en';
+    const validLang = ['en', 'es', 'pt'].includes(lang) ? lang : 'en';
+
+    // Fazer a chamada - AGORA COM IDIOMA NA URL
     const call = await twilioClient.calls.create({
       to: formattedPhone,
       from: TWILIO_PHONE_NUMBER,
-      url: `${WS_SERVER_URL}/incoming-call`,
+      url: `${WS_SERVER_URL}/incoming-call?lang=${validLang}`,
       statusCallback: webhookUrl || `${WS_SERVER_URL}/call-status`,
       statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
       statusCallbackMethod: 'POST',
