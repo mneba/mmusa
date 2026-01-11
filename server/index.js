@@ -129,6 +129,7 @@ wss.on('connection', (twilioWs, request) => {
   let isOpenAiReady = false;
   let audioBuffer = [];
   let messageCount = 0;
+  let audioPacketsSent = 0;
 
   // Conectar ao OpenAI
   const connectToOpenAI = () => {
@@ -205,8 +206,12 @@ wss.on('connection', (twilioWs, request) => {
           console.log(`🤖 OpenAI: ${event.type}`);
         }
         
-        if (event.type === 'response.audio.delta' && event.delta && streamSid) {
-          // Enviar áudio para Twilio
+        // ÁUDIO DA IA - Enviar para Twilio
+        if (event.type === 'response.output_audio.delta' && event.delta && streamSid) {
+          audioPacketsSent++;
+          if (audioPacketsSent === 1) console.log('🔊 Enviando primeiro pacote de áudio para Twilio');
+          if (audioPacketsSent % 50 === 0) console.log(`🔊 ${audioPacketsSent} pacotes de áudio enviados ao Twilio`);
+          
           twilioWs.send(JSON.stringify({
             event: 'media',
             streamSid: streamSid,
