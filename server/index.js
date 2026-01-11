@@ -19,7 +19,7 @@ const COMPANY_NAME = process.env.COMPANY_NAME || 'Pool Solutions';
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-realtime';
 const OPENAI_REALTIME_URL = `wss://api.openai.com/v1/realtime?model=${OPENAI_MODEL}`;
-const AI_VOICE = process.env.AI_VOICE || 'alloy';
+const AI_VOICE = process.env.AI_VOICE || 'coral';
 
 if (!OPENAI_API_KEY) {
   console.error('❌ OPENAI_API_KEY não configurada!');
@@ -30,13 +30,14 @@ if (!OPENAI_API_KEY) {
 // SYSTEM PROMPT
 // ============================================================================
 
-const SYSTEM_PROMPT = `You are a friendly AI assistant from ${COMPANY_NAME}, a pool installation company.
-Your goal is to qualify leads for pool installation.
-Speak in a warm, conversational tone.
-Ask about: pool type preference, yard size, timeline, and budget.
-Keep responses brief - this is a phone call.`;
+const SYSTEM_PROMPT = `Você é um assistente de IA amigável da ${COMPANY_NAME}, uma empresa de instalação de piscinas.
+Seu objetivo é qualificar leads para instalação de piscinas.
+Fale de forma calorosa e conversacional em português brasileiro.
+Pergunte sobre: tipo de piscina preferida, tamanho do quintal, prazo e orçamento.
+Mantenha respostas breves - é uma ligação telefônica.
+Se alguém pedir para sair da lista, diga que vai remover e encerre educadamente.`;
 
-const COMPLIANCE_GREETING = `Hello! This is ${COMPANY_NAME} with an automated call. This call may be recorded. Say stop to be removed.`;
+const COMPLIANCE_GREETING = `Olá! Esta é a ${COMPANY_NAME} com uma ligação automatizada. Esta chamada pode ser gravada. Diga parar para ser removido da lista.`;
 
 // ============================================================================
 // FASTIFY (para rotas HTTP)
@@ -68,7 +69,7 @@ fastify.all('/incoming-call', async (request, reply) => {
   
   const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Matthew">${COMPLIANCE_GREETING}</Say>
+  <Say voice="Polly.Camila" language="pt-BR">${COMPLIANCE_GREETING}</Say>
   <Connect>
     <Stream url="wss://${host}/media-stream">
       <Parameter name="callSid" value="${callSid}" />
@@ -151,7 +152,7 @@ wss.on('connection', (twilioWs, request) => {
           output_modalities: ['audio'],
           audio: {
             input: {
-              format: { type: 'audio/g711-ulaw', rate: 8000 },
+              format: { type: 'audio/pcmu' },
               turn_detection: {
                 type: 'server_vad',
                 threshold: 0.5,
@@ -160,7 +161,7 @@ wss.on('connection', (twilioWs, request) => {
               }
             },
             output: {
-              format: { type: 'audio/g711-ulaw', rate: 8000 },
+              format: { type: 'audio/pcmu' },
               voice: AI_VOICE
             }
           }
