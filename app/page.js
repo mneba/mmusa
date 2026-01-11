@@ -333,6 +333,8 @@ export default function Dashboard() {
                   ))}
                 </select>
               </div>
+              
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Notas (opcional)
                 </label>
