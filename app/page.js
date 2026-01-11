@@ -36,10 +36,25 @@ export default function Dashboard() {
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
+    country: 'US',
     state: 'FL',
     language: 'en',
+    fromNumber: '+13055700365',
     notes: ''
   });
+
+  // Countries
+  const countries = [
+    { code: 'US', name: '🇺🇸 Estados Unidos', defaultLang: 'en' },
+    { code: 'BR', name: '🇧🇷 Brasil', defaultLang: 'pt' }
+  ];
+
+  // Twilio Numbers (adicione mais conforme comprar)
+  const twilioNumbers = [
+    { number: '+13055700365', label: '🇺🇸 +1 (305) 570-0365 - Miami', country: 'US' },
+    // Adicione números brasileiros aqui quando comprar:
+    // { number: '+5511999999999', label: '🇧🇷 +55 (11) 99999-9999 - São Paulo', country: 'BR' },
+  ];
 
   // Languages
   const languages = [
@@ -56,6 +71,23 @@ export default function Dashboard() {
     'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
     'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
   ];
+
+  // Brazilian States
+  const brStates = [
+    'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+    'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+    'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+  ];
+
+  // Get states based on country
+  const getStates = (country) => country === 'BR' ? brStates : usStates;
+
+  // Get available numbers for country
+  const getNumbersForCountry = (country) => {
+    const numbers = twilioNumbers.filter(n => n.country === country);
+    // If no number for this country, show all
+    return numbers.length > 0 ? numbers : twilioNumbers;
+  };
 
   // Load leads from localStorage
   useEffect(() => {
@@ -114,7 +146,7 @@ export default function Dashboard() {
       setLeads(prev => [newLead, ...prev]);
     }
     
-    setFormData({ name: '', phone: '', state: 'FL', language: 'en', notes: '' });
+    setFormData({ name: '', phone: '', country: 'US', state: 'FL', language: 'en', fromNumber: '+13055700365', notes: '' });
     setShowForm(false);
   };
 
@@ -128,8 +160,10 @@ export default function Dashboard() {
     setFormData({
       name: lead.name,
       phone: lead.phone,
+      country: lead.country || 'US',
       state: lead.state,
       language: lead.language || 'en',
+      fromNumber: lead.fromNumber || '+13055700365',
       notes: lead.notes || ''
     });
     setEditingLead(lead);
@@ -246,7 +280,7 @@ export default function Dashboard() {
               onClick={() => {
                 setShowForm(!showForm);
                 setEditingLead(null);
-                setFormData({ name: '', phone: '', state: 'FL', language: 'en', notes: '' });
+                setFormData({ name: '', phone: '', country: 'US', state: 'FL', language: 'en', fromNumber: '+13055700365', notes: '' });
               }}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
             >
@@ -275,7 +309,7 @@ export default function Dashboard() {
               {editingLead ? '✏️ Editar Lead' : '➕ Novo Lead'}
             </h2>
             
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nome
@@ -284,7 +318,7 @@ export default function Dashboard() {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="John Smith"
+                  placeholder="John Smith / João Silva"
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
@@ -292,13 +326,40 @@ export default function Dashboard() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Telefone (EUA)
+                  📍 País
+                </label>
+                <select
+                  value={formData.country}
+                  onChange={(e) => {
+                    const country = e.target.value;
+                    const defaultLang = countries.find(c => c.code === country)?.defaultLang || 'en';
+                    const defaultState = country === 'BR' ? 'SP' : 'FL';
+                    const numbers = getNumbersForCountry(country);
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      country,
+                      state: defaultState,
+                      language: defaultLang,
+                      fromNumber: numbers[0]?.number || prev.fromNumber
+                    }));
+                  }}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {countries.map(country => (
+                    <option key={country.code} value={country.code}>{country.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Telefone
                 </label>
                 <input
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                  placeholder="(305) 555-1234"
+                  placeholder={formData.country === 'BR' ? '(11) 99999-9999' : '(305) 555-1234'}
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
@@ -313,7 +374,7 @@ export default function Dashboard() {
                   onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  {usStates.map(state => (
+                  {getStates(formData.country).map(state => (
                     <option key={state} value={state}>{state}</option>
                   ))}
                 </select>
@@ -333,8 +394,23 @@ export default function Dashboard() {
                   ))}
                 </select>
               </div>
-              
+
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  📞 Ligar de (Origem)
+                </label>
+                <select
+                  value={formData.fromNumber}
+                  onChange={(e) => setFormData(prev => ({ ...prev, fromNumber: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {twilioNumbers.map(num => (
+                    <option key={num.number} value={num.number}>{num.label}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Notas (opcional)
                 </label>
@@ -347,7 +423,7 @@ export default function Dashboard() {
                 />
               </div>
               
-              <div className="md:col-span-2">
+              <div className="md:col-span-3">
                 <button
                   type="submit"
                   className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
@@ -379,10 +455,9 @@ export default function Dashboard() {
                 <tr>
                   <th className="text-left px-4 py-3 text-sm font-semibold text-gray-600">Nome</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold text-gray-600">Telefone</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold text-gray-600">Estado</th>
+                  <th className="text-left px-4 py-3 text-sm font-semibold text-gray-600">Local</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold text-gray-600">🌐</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold text-gray-600">Status</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold text-gray-600">Notas</th>
                   <th className="text-right px-4 py-3 text-sm font-semibold text-gray-600">Ações</th>
                 </tr>
               </thead>
@@ -391,6 +466,7 @@ export default function Dashboard() {
                   <tr key={lead.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <span className="font-medium text-gray-800">{lead.name}</span>
+                      {lead.notes && <p className="text-xs text-gray-400 truncate max-w-[150px]">{lead.notes}</p>}
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-gray-600 font-mono text-sm">
@@ -398,7 +474,9 @@ export default function Dashboard() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-gray-600">{lead.state}</span>
+                      <span className="text-gray-600">
+                        {lead.country === 'BR' ? '🇧🇷' : '🇺🇸'} {lead.state}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-lg" title={lead.language === 'en' ? 'English' : lead.language === 'es' ? 'Español' : 'Português'}>
@@ -415,11 +493,6 @@ export default function Dashboard() {
                           <option key={value} value={value}>{label}</option>
                         ))}
                       </select>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-gray-500 text-sm truncate max-w-[150px] block">
-                        {lead.notes || '-'}
-                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
@@ -475,15 +548,28 @@ export default function Dashboard() {
         {/* Quick Info */}
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white rounded-xl shadow-sm border p-4">
-            <h3 className="font-semibold text-gray-700 mb-2">📞 Número de Origem</h3>
-            <p className="text-2xl font-mono text-blue-600">+1 (305) 570-0365</p>
-            <p className="text-sm text-gray-500 mt-1">Este número aparece para o lead</p>
+            <h3 className="font-semibold text-gray-700 mb-2">📞 Números Disponíveis</h3>
+            <div className="space-y-1">
+              {twilioNumbers.map(num => (
+                <p key={num.number} className="text-sm font-mono text-blue-600">{num.label}</p>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-2">Adicione mais números no código</p>
           </div>
           
           <div className="bg-white rounded-xl shadow-sm border p-4">
-            <h3 className="font-semibold text-gray-700 mb-2">🤖 IA de Voz</h3>
-            <p className="text-lg text-gray-800">OpenAI Realtime</p>
-            <p className="text-sm text-gray-500 mt-1">🇺🇸 EN | 🇪🇸 ES | 🇧🇷 PT</p>
+            <h3 className="font-semibold text-gray-700 mb-2">🌎 Países Suportados</h3>
+            <div className="flex gap-4">
+              <div className="text-center">
+                <span className="text-2xl">🇺🇸</span>
+                <p className="text-xs text-gray-500">EUA</p>
+              </div>
+              <div className="text-center">
+                <span className="text-2xl">🇧🇷</span>
+                <p className="text-xs text-gray-500">Brasil</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 mt-2">🤖 IA: EN | ES | PT</p>
           </div>
           
           <div className="bg-white rounded-xl shadow-sm border p-4">
@@ -513,12 +599,15 @@ export default function Dashboard() {
         <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-6">
           <h3 className="font-semibold text-blue-800 mb-3">💡 Como usar</h3>
           <ol className="list-decimal list-inside space-y-2 text-blue-700">
-            <li>Adicione leads com nome, telefone (formato EUA), estado e <strong>idioma</strong></li>
-            <li>Selecione o idioma: 🇺🇸 English, 🇪🇸 Español ou 🇧🇷 Português</li>
-            <li>Clique em <strong>"📞 Ligar"</strong> para iniciar uma chamada</li>
+            <li>Selecione o <strong>país</strong> do lead (🇺🇸 EUA ou 🇧🇷 Brasil)</li>
+            <li>Adicione nome, telefone e estado</li>
+            <li>Escolha o <strong>idioma</strong> da conversa e o <strong>número de origem</strong></li>
+            <li>Clique em <strong>"📞 Ligar"</strong> para iniciar a chamada</li>
             <li>A IA vai conversar com o lead no idioma selecionado</li>
-            <li>Atualize o status do lead conforme o resultado da chamada</li>
           </ol>
+          <p className="text-xs text-blue-600 mt-4">
+            💡 Para adicionar número brasileiro: compre no Twilio e adicione em <code>twilioNumbers</code> no código
+          </p>
         </div>
       </main>
     </div>

@@ -4,10 +4,38 @@
  * POST /api/calls/make
  * 
  * Inicia uma chamada para um lead usando Twilio
+ * Suporta múltiplos países (US, BR) e números de origem
  */
 
 import twilio from 'twilio';
-import { validateLeadForCall, formatPhoneNumber } from '@/lib/compliance';
+import { validateLeadForCall } from '@/lib/compliance';
+
+// Formatar número de telefone baseado no país
+function formatPhoneForCountry(phone, country) {
+  // Remove tudo que não é número
+  const cleaned = phone.replace(/\D/g, '');
+  
+  if (country === 'BR') {
+    // Brasil: espera 10-11 dígitos (com DDD)
+    if (cleaned.length === 10 || cleaned.length === 11) {
+      return `+55${cleaned}`;
+    }
+    // Se já tem 55 no início
+    if (cleaned.startsWith('55') && cleaned.length >= 12) {
+      return `+${cleaned}`;
+    }
+    return `+55${cleaned}`;
+  }
+  
+  // EUA (padrão)
+  if (cleaned.length === 10) {
+    return `+1${cleaned}`;
+  }
+  if (cleaned.length === 11 && cleaned.startsWith('1')) {
+    return `+${cleaned}`;
+  }
+  return `+1${cleaned}`;
+}
 
 export async function POST(request) {
   try {
@@ -57,8 +85,8 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
-    // Formatar número
-    const formattedPhone = formatPhoneNumber(lead.phone);
+    // Formatar número de destino baseado no país
+    const formattedPhone = formatPhoneForCountry(lead.phone, lead.country || 'US');
 
     // Inicializar cliente Twilio
     const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
@@ -67,10 +95,13 @@ export async function POST(request) {
     const lang = lead.language || 'en';
     const validLang = ['en', 'es', 'pt'].includes(lang) ? lang : 'en';
 
-    // Fazer a chamada - AGORA COM IDIOMA NA URL
+    // Número de origem - usa o do lead ou o padrão do ambiente
+    const fromNumber = lead.fromNumber || TWILIO_PHONE_NUMBER;
+
+    // Fazer a chamada - COM IDIOMA NA URL E NÚMERO DE ORIGEM DINÂMICO
     const call = await twilioClient.calls.create({
       to: formattedPhone,
-      from: TWILIO_PHONE_NUMBER,
+      from: fromNumber,
       url: `${WS_SERVER_URL}/incoming-call?lang=${validLang}`,
       statusCallback: webhookUrl || `${WS_SERVER_URL}/call-status`,
       statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
