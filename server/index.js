@@ -5,7 +5,6 @@
  * 
  * Servidor que faz a ponte entre Twilio Media Streams e OpenAI Realtime API
  */
-
 import Fastify from 'fastify';
 import fastifyWs from '@fastify/websocket';
 import fastifyFormBody from '@fastify/formbody';
@@ -14,7 +13,6 @@ import WebSocket from 'ws';
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
-
 const PORT = process.env.PORT || 8080;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const COMPANY_NAME = process.env.COMPANY_NAME || 'Pool Solutions';
