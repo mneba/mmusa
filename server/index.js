@@ -17,7 +17,7 @@ const PORT = process.env.PORT || 8080;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const COMPANY_NAME = process.env.COMPANY_NAME || 'Pool Solutions';
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-realtime-preview-2024-12-17';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-realtime';
 const OPENAI_REALTIME_URL = `wss://api.openai.com/v1/realtime?model=${OPENAI_MODEL}`;
 const AI_VOICE = process.env.AI_VOICE || 'alloy';
 
@@ -141,21 +141,28 @@ wss.on('connection', (twilioWs, request) => {
     openAiWs.on('open', () => {
       console.log('✅ OpenAI CONECTADO!');
       
+      // Configuração para API GA - estrutura atualizada
       openAiWs.send(JSON.stringify({
         type: 'session.update',
         session: {
           type: 'realtime',
-          modalities: ['text', 'audio'],
+          model: OPENAI_MODEL,
           instructions: SYSTEM_PROMPT,
-          voice: AI_VOICE,
-          input_audio_format: 'g711_ulaw',
-          output_audio_format: 'g711_ulaw',
-          input_audio_transcription: { model: 'whisper-1' },
-          turn_detection: {
-            type: 'server_vad',
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 500
+          output_modalities: ['audio'],
+          audio: {
+            input: {
+              format: { type: 'audio/g711-ulaw', rate: 8000 },
+              turn_detection: {
+                type: 'server_vad',
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 500
+              }
+            },
+            output: {
+              format: { type: 'audio/g711-ulaw', rate: 8000 },
+              voice: AI_VOICE
+            }
           }
         }
       }));
