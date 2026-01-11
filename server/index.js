@@ -22,11 +22,15 @@ const PORT = process.env.PORT || 8080;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const COMPANY_NAME = process.env.COMPANY_NAME || 'Pool Solutions';
 
-// OpenAI Realtime API - Versão GA
-const OPENAI_REALTIME_URL = 'wss://api.openai.com/v1/realtime?model=gpt-realtime';
+// OpenAI Realtime API - Tentar GA primeiro, fallback para preview
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-realtime-preview-2024-12-17';
+const OPENAI_REALTIME_URL = `wss://api.openai.com/v1/realtime?model=${OPENAI_MODEL}`;
 
 // Vozes disponíveis: alloy, ash, ballad, coral, echo, sage, shimmer, verse
-const AI_VOICE = process.env.AI_VOICE || 'coral';
+const AI_VOICE = process.env.AI_VOICE || 'alloy';
+
+// Debug mode
+const DEBUG = process.env.DEBUG === 'true' || true; // Sempre ativo por enquanto
 
 // Validação
 if (!OPENAI_API_KEY) {
@@ -86,10 +90,7 @@ Você está fazendo ligações para pessoas que demonstraram interesse em instal
 // SAUDAÇÃO DE COMPLIANCE (TCPA)
 // ============================================================================
 
-const COMPLIANCE_GREETING = `Olá! Esta é uma ligação automatizada da ${COMPANY_NAME}. 
-Sou um assistente de inteligência artificial entrando em contato com pessoas interessadas em instalação de piscinas residenciais. 
-Esta ligação pode ser gravada para fins de qualidade. 
-Você pode dizer "parar" a qualquer momento para ser removido da nossa lista, ou "transferir" para falar com um representante humano.`;
+const COMPLIANCE_GREETING = `Olá! Esta é a ${COMPANY_NAME} com uma ligação automatizada. Esta chamada pode ser gravada. Diga parar para sair da lista.`;
 
 // ============================================================================
 // SERVIDOR FASTIFY
@@ -115,7 +116,7 @@ fastify.get('/', async () => {
     status: 'online',
     service: 'Pool Leads AI Agent - WebSocket Server',
     activeCalls: activeCalls.size,
-    model: 'gpt-realtime (GA)',
+    model: OPENAI_MODEL,
     voice: AI_VOICE
   };
 });
@@ -340,14 +341,22 @@ fastify.register(async (fastify) => {
     twilioWs.on('message', (message) => {
       try {
         const data = JSON.parse(message.toString());
+        
+        // Log de todos os eventos recebidos
+        console.log(`📨 Evento Twilio recebido: ${data.event}`);
 
         switch (data.event) {
+          case 'connected':
+            console.log('🔗 Twilio confirmou conexão WebSocket');
+            break;
+            
           case 'start':
             streamSid = data.start.streamSid;
             callSid = data.start.customParameters?.callSid;
             
             console.log(`🎬 Stream iniciado: ${streamSid}`);
             console.log(`   CallSid: ${callSid}`);
+            console.log(`   Parâmetros: ${JSON.stringify(data.start.customParameters)}`);
             
             activeCalls.set(callSid, {
               streamSid,
@@ -367,18 +376,29 @@ fastify.register(async (fastify) => {
             } else {
               // Buffer enquanto OpenAI não está pronto
               audioBuffer.push(data.media.payload);
+              if (audioBuffer.length % 100 === 0) {
+                console.log(`📦 Buffer de áudio: ${audioBuffer.length} pacotes (OpenAI pronto: ${isOpenAiReady})`);
+              }
             }
             break;
 
           case 'stop':
-            console.log('🛑 Stream encerrado');
+            console.log('🛑 Stream encerrado pelo Twilio');
             if (openAiWs) {
               openAiWs.close();
             }
             break;
+            
+          case 'mark':
+            console.log(`🏷️ Mark recebido: ${data.mark?.name}`);
+            break;
+            
+          default:
+            console.log(`❓ Evento desconhecido: ${data.event}`);
         }
       } catch (error) {
-        console.error('Erro ao processar mensagem Twilio:', error);
+        console.error('❌ Erro ao processar mensagem Twilio:', error);
+        console.error('   Mensagem raw:', message.toString().substring(0, 200));
       }
     });
 
@@ -409,7 +429,7 @@ const start = async () => {
 ║                                                                  ║
 ║  Servidor rodando na porta ${PORT}                                  ║
 ║                                                                  ║
-║  Modelo: gpt-realtime (GA)                                       ║
+║  Modelo: ${OPENAI_MODEL.padEnd(45)}║
 ║  Voz: ${AI_VOICE.padEnd(10)}                                             ║
 ║                                                                  ║
 ║  Endpoints:                                                      ║
