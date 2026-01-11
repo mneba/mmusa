@@ -157,7 +157,9 @@ wss.on('connection', (twilioWs, request) => {
                 type: 'server_vad',
                 threshold: 0.5,
                 prefix_padding_ms: 300,
-                silence_duration_ms: 500
+                silence_duration_ms: 500,
+                create_response: true,
+                interrupt_response: true
               }
             },
             output: {
@@ -181,13 +183,30 @@ wss.on('connection', (twilioWs, request) => {
       }
       
       isOpenAiReady = true;
+      
+      // Fazer a IA se apresentar proativamente
+      setTimeout(() => {
+        console.log('🎙️ Solicitando saudação da IA...');
+        openAiWs.send(JSON.stringify({
+          type: 'response.create',
+          response: {
+            instructions: 'Cumprimente o usuário brevemente em português brasileiro e pergunte como pode ajudar com piscinas hoje.'
+          }
+        }));
+      }, 1000);
     });
 
     openAiWs.on('message', (data) => {
       try {
         const event = JSON.parse(data.toString());
         
+        // Log todos os tipos de eventos (exceto audio delta que é muito frequente)
+        if (!event.type.includes('audio.delta')) {
+          console.log(`🤖 OpenAI: ${event.type}`);
+        }
+        
         if (event.type === 'response.audio.delta' && event.delta && streamSid) {
+          // Enviar áudio para Twilio
           twilioWs.send(JSON.stringify({
             event: 'media',
             streamSid: streamSid,
@@ -205,6 +224,15 @@ wss.on('connection', (twilioWs, request) => {
         }
         else if (event.type === 'input_audio_buffer.speech_started') {
           console.log('🎤 User speaking...');
+        }
+        else if (event.type === 'input_audio_buffer.speech_stopped') {
+          console.log('🔇 User stopped speaking');
+        }
+        else if (event.type === 'response.created') {
+          console.log('💬 Response started');
+        }
+        else if (event.type === 'response.done') {
+          console.log('✅ Response complete');
         }
         else if (event.type === 'error') {
           console.error('❌ OpenAI Error:', JSON.stringify(event.error));
