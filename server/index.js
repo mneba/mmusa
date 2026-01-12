@@ -243,7 +243,10 @@ wss.on('connection', (twilioWs, request) => {
     console.log(`   🌐 Idioma: ${lang.toUpperCase()}`);
     
     openAiWs = new WebSocket(OPENAI_REALTIME_URL, {
-      headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` }
+      headers: { 
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'OpenAI-Beta': 'realtime=v1'  // Usar interface Beta que suporta g711_ulaw
+      }
     });
 
     openAiWs.on('open', () => {
@@ -253,30 +256,23 @@ wss.on('connection', (twilioWs, request) => {
       const systemPrompt = SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.en;
       const voice = VOICES[lang] || VOICES.en;
       
-      // Configurar sessão - API GA (nova estrutura)
+      // Configurar sessão - API Beta (estrutura que funciona com Twilio g711_ulaw)
       openAiWs.send(JSON.stringify({
         type: 'session.update',
         session: {
-          type: 'realtime',
+          modalities: ['text', 'audio'],
           instructions: systemPrompt,
-          audio: {
-            input: {
-              format: { type: 'audio/g711-ulaw', sample_rate: 8000 },
-              transcription: { model: 'whisper-1' }
-            },
-            output: {
-              format: { type: 'audio/g711-ulaw', sample_rate: 8000 },
-              voice: voice
-            }
-          },
+          voice: voice,
+          input_audio_format: 'g711_ulaw',
+          output_audio_format: 'g711_ulaw',
+          input_audio_transcription: { model: 'whisper-1' },
           turn_detection: {
             type: 'server_vad',
             threshold: 0.5,
             prefix_padding_ms: 300,
-            silence_duration_ms: 600,
-            create_response: true,
-            interrupt_response: true
-          }
+            silence_duration_ms: 600
+          },
+          temperature: 0.8
         }
       }));
       
