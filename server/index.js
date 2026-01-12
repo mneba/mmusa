@@ -124,9 +124,9 @@ const COMPLIANCE_GREETINGS = {
 
 // Instruções de saudação para IA
 const GREETING_INSTRUCTIONS = {
-  en: 'Greet the person warmly. Introduce yourself briefly and ask if they have a moment to discuss their pool project. Be natural and friendly.',
-  es: 'Saluda a la persona calurosamente. Preséntate brevemente y pregunta si tienen un momento para hablar sobre su proyecto de piscina. Sé natural y amigable.',
-  pt: 'Cumprimente a pessoa de forma calorosa. Apresente-se brevemente e pergunte se ela tem um momento para conversar sobre o projeto de piscina. Seja natural e amigável.'
+  en: 'Start the call naturally. Say hello, introduce yourself as calling from Pool Leads about their pool installation interest. Mention briefly that the call may be recorded. Then ask if they have a moment to chat. Keep it warm and conversational.',
+  es: 'Comienza la llamada de forma natural. Saluda, preséntate como llamando de Pool Leads sobre su interés en instalación de piscinas. Menciona brevemente que la llamada puede ser grabada. Luego pregunta si tienen un momento para hablar. Mantén un tono cálido y conversacional.',
+  pt: 'Comece a ligação de forma natural. Diga olá, se apresente como ligando da Pool Leads sobre o interesse em instalação de piscina. Mencione brevemente que a ligação pode ser gravada. Depois pergunte se a pessoa tem um momento para conversar. Seja caloroso e natural.'
 };
 
 // ============================================================================
@@ -168,7 +168,6 @@ fastify.all('/incoming-call', async (request, reply) => {
   
   const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="${twilioVoice.voice}" language="${twilioVoice.language}">${greeting}</Say>
   <Connect>
     <Stream url="wss://${host}/media-stream">
       <Parameter name="callSid" value="${callSid}" />
@@ -268,9 +267,9 @@ wss.on('connection', (twilioWs, request) => {
           input_audio_transcription: { model: 'whisper-1' },
           turn_detection: {
             type: 'server_vad',
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 600
+            threshold: 0.6,           // Aumentado de 0.5 para menos falsos positivos
+            prefix_padding_ms: 400,   // Aumentado para capturar início da fala
+            silence_duration_ms: 800  // Aumentado para evitar cortes prematuros
           },
           temperature: 0.8
         }
@@ -308,7 +307,7 @@ wss.on('connection', (twilioWs, request) => {
                 instructions: GREETING_INSTRUCTIONS[currentLang] || GREETING_INSTRUCTIONS.en
               }
             }));
-          }, 500);
+          }, 1000);  // Aumentado para stream estabilizar
         }
         
         // ÁUDIO DA IA - Enviar para Twilio
