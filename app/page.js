@@ -30,6 +30,7 @@ export default function Dashboard() {
     notes: '',
     callContext: ''
   });
+  const [phoneCountry, setPhoneCountry] = useState('us'); // 'us' ou 'br'
   
   // Call settings
   const [callLang, setCallLang] = useState('en');
@@ -138,6 +139,14 @@ export default function Dashboard() {
       setLoading(true);
       setError(null);
       
+      // Formatar telefone com DDI
+      let formattedPhone = formData.phone.replace(/\D/g, ''); // Remove não-numéricos
+      if (phoneCountry === 'us') {
+        formattedPhone = '+1' + formattedPhone;
+      } else {
+        formattedPhone = '+55' + formattedPhone;
+      }
+      
       const url = editingLead 
         ? `${API_URL}/api/leads/${editingLead.id}`
         : `${API_URL}/api/leads`;
@@ -147,7 +156,10 @@ export default function Dashboard() {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          phone: formattedPhone
+        })
       });
       
       if (!res.ok) throw new Error('Erro ao salvar lead');
@@ -156,6 +168,7 @@ export default function Dashboard() {
       setShowForm(false);
       setEditingLead(null);
       setFormData({ name: '', phone: '', email: '', notes: '', callContext: '' });
+      setPhoneCountry('us');
       fetchLeads();
       
       setTimeout(() => setSuccess(null), 3000);
@@ -184,9 +197,23 @@ export default function Dashboard() {
   
   const handleEditLead = (lead) => {
     setEditingLead(lead);
+    
+    // Detectar país pelo DDI e remover do número
+    let phone = lead.phone || '';
+    let country = 'us';
+    
+    if (phone.startsWith('+55')) {
+      country = 'br';
+      phone = phone.substring(3);
+    } else if (phone.startsWith('+1')) {
+      country = 'us';
+      phone = phone.substring(2);
+    }
+    
+    setPhoneCountry(country);
     setFormData({
       name: lead.name || '',
-      phone: lead.phone || '',
+      phone: phone,
       email: lead.email || '',
       notes: lead.notes || '',
       callContext: lead.callContext || ''
@@ -423,7 +450,7 @@ export default function Dashboard() {
             {/* Actions Bar */}
             <div className="flex flex-wrap gap-4 mb-6 items-center">
               <button
-                onClick={() => { setShowForm(true); setEditingLead(null); setFormData({ name: '', phone: '', email: '', notes: '', callContext: '' }); }}
+                onClick={() => { setShowForm(true); setEditingLead(null); setFormData({ name: '', phone: '', email: '', notes: '', callContext: '' }); setPhoneCountry('us'); }}
                 className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium"
               >
                 + Novo Lead
@@ -482,14 +509,27 @@ export default function Dashboard() {
                     </div>
                     
                     <div>
-                      <label className="block text-sm text-gray-400 mb-1">Telefone * (formato: +1XXXXXXXXXX)</label>
-                      <input
-                        type="tel"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
-                        placeholder="+13055551234"
-                      />
+                      <label className="block text-sm text-gray-400 mb-1">Telefone *</label>
+                      <div className="flex gap-2">
+                        <select
+                          value={phoneCountry}
+                          onChange={(e) => setPhoneCountry(e.target.value)}
+                          className="bg-gray-700 border border-gray-600 rounded px-3 py-2 w-32"
+                        >
+                          <option value="us">🇺🇸 +1</option>
+                          <option value="br">🇧🇷 +55</option>
+                        </select>
+                        <input
+                          type="tel"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({...formData, phone: e.target.value.replace(/\D/g, '')})}
+                          className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                          placeholder={phoneCountry === 'us' ? '3055551234' : '11999999999'}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {phoneCountry === 'us' ? 'Formato: (XXX) XXX-XXXX' : 'Formato: (XX) XXXXX-XXXX'}
+                      </p>
                     </div>
                     
                     <div>
@@ -533,7 +573,7 @@ export default function Dashboard() {
                   
                   <div className="flex gap-3 mt-6">
                     <button
-                      onClick={() => { setShowForm(false); setEditingLead(null); }}
+                      onClick={() => { setShowForm(false); setEditingLead(null); setPhoneCountry('us'); }}
                       className="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg"
                     >
                       Cancelar
