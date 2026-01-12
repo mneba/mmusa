@@ -121,7 +121,7 @@ export default function Dashboard() {
   const [editingLead, setEditingLead] = useState(null);
   const [formData, setFormData] = useState({
     name: '', phone: '', email: '', notes: '',
-    language: 'en', objectiveId: '', nextStep: '', status: 'new'
+    language: 'en', objectiveId: '', status: 'new'
   });
   const [phoneCountry, setPhoneCountry] = useState('us');
   
@@ -339,21 +339,25 @@ export default function Dashboard() {
     setFormData({
       name: lead.name || '', phone, email: lead.email || '', notes: lead.notes || '',
       language: lead.language || 'en', objectiveId: lead.objectiveId || '',
-      nextStep: lead.nextStep || '', status: lead.status || 'new'
+      status: lead.status || 'new'
     });
     setShowForm(true);
   };
   
   const handleQuickStatusChange = async (leadId, newStatus) => {
     try {
+      // Atualizar estado local imediatamente para feedback visual
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
+      
       await fetch(`${API_URL}/api/leads/${leadId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
       });
-      fetchLeads();
     } catch (err) {
       setError(err.message);
+      // Reverter em caso de erro
+      fetchLeads();
     }
   };
   
@@ -587,7 +591,7 @@ export default function Dashboard() {
   const closeForm = () => {
     setShowForm(false);
     setEditingLead(null);
-    setFormData({ name: '', phone: '', email: '', notes: '', language: 'en', objectiveId: '', nextStep: '', status: 'new' });
+    setFormData({ name: '', phone: '', email: '', notes: '', language: 'en', objectiveId: '', status: 'new' });
     setPhoneCountry('us');
   };
   
@@ -858,14 +862,6 @@ export default function Dashboard() {
                       )}
                     </div>
                     
-                    {/* Próximo Passo */}
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">📅 {t.form.nextStep}</label>
-                      <input type="text" value={formData.nextStep} onChange={(e) => setFormData({...formData, nextStep: e.target.value})}
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
-                        placeholder={systemLang === 'pt' ? 'Ex: Agendar visita quinta 8h' : 'Ex: Schedule visit Thursday 8am'} />
-                    </div>
-                    
                     {/* Notas */}
                     <div>
                       <label className="block text-sm text-gray-400 mb-1">{t.form.notes}</label>
@@ -966,7 +962,7 @@ export default function Dashboard() {
                             <option key={key} value={key} className="bg-gray-800">{label}</option>
                           ))}
                         </select>
-                        {lead.lastIntent && (
+                        {lead.lastIntent && lead.lastIntent !== 'unknown' && (
                           <span className={`ml-1 px-2 py-1 rounded text-xs ${getIntentColor(lead.lastIntent)}`}>
                             {lead.lastIntent}
                           </span>
