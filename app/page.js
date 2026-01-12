@@ -32,14 +32,14 @@ export default function Dashboard() {
   });
   
   // Call settings
-  const [callLang, setCallLang] = useState('pt');
+  const [callLang, setCallLang] = useState('en');
   
   // Queue status
   const [queueStatus, setQueueStatus] = useState(null);
   
   // Prompts
   const [prompts, setPrompts] = useState(null);
-  const [editingPromptLang, setEditingPromptLang] = useState('pt');
+  const [editingPromptLang, setEditingPromptLang] = useState('en');
   const [editingPromptType, setEditingPromptType] = useState('system');
   const [promptText, setPromptText] = useState('');
   
@@ -436,9 +436,9 @@ export default function Dashboard() {
                   onChange={(e) => setCallLang(e.target.value)}
                   className="bg-gray-700 border border-gray-600 rounded px-3 py-2"
                 >
-                  <option value="pt">🇧🇷 Português</option>
                   <option value="en">🇺🇸 English</option>
                   <option value="es">🇪🇸 Español</option>
+                  <option value="pt">🇧🇷 Português</option>
                 </select>
               </div>
               
@@ -482,13 +482,13 @@ export default function Dashboard() {
                     </div>
                     
                     <div>
-                      <label className="block text-sm text-gray-400 mb-1">Telefone *</label>
+                      <label className="block text-sm text-gray-400 mb-1">Telefone * (formato: +1XXXXXXXXXX)</label>
                       <input
                         type="tel"
                         value={formData.phone}
                         onChange={(e) => setFormData({...formData, phone: e.target.value})}
                         className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
-                        placeholder="+5511999999999"
+                        placeholder="+13055551234"
                       />
                     </div>
                     
@@ -685,9 +685,9 @@ export default function Dashboard() {
                     onChange={(e) => setEditingPromptLang(e.target.value)}
                     className="bg-gray-700 border border-gray-600 rounded px-3 py-2"
                   >
-                    <option value="pt">🇧🇷 Português</option>
                     <option value="en">🇺🇸 English</option>
                     <option value="es">🇪🇸 Español</option>
+                    <option value="pt">🇧🇷 Português</option>
                   </select>
                 </div>
               </div>
