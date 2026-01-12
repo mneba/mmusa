@@ -253,23 +253,24 @@ wss.on('connection', (twilioWs, request) => {
       const systemPrompt = SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.en;
       const voice = VOICES[lang] || VOICES.en;
       
-      // Configurar sessão
+      // Configurar sessão - usando formato que funcionou anteriormente
       openAiWs.send(JSON.stringify({
         type: 'session.update',
         session: {
+          type: 'realtime',
           modalities: ['text', 'audio'],
           instructions: systemPrompt,
           voice: voice,
           input_audio_format: 'g711_ulaw',
           output_audio_format: 'g711_ulaw',
-          input_audio_transcription: { model: 'whisper-1' },
+          input_audio_transcription: {
+            model: 'whisper-1'
+          },
           turn_detection: {
             type: 'server_vad',
             threshold: 0.5,
             prefix_padding_ms: 300,
-            silence_duration_ms: 600,
-            create_response: true,
-            interrupt_response: true
+            silence_duration_ms: 600
           },
           temperature: 0.8,
           max_response_output_tokens: 4096
