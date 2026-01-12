@@ -1,614 +1,893 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
-const statusColors = {
-  new: 'bg-blue-100 text-blue-800',
-  calling: 'bg-yellow-100 text-yellow-800',
-  contacted: 'bg-green-100 text-green-800',
-  no_answer: 'bg-orange-100 text-orange-800',
-  interested: 'bg-emerald-100 text-emerald-800',
-  not_interested: 'bg-gray-100 text-gray-800',
-  callback: 'bg-purple-100 text-purple-800',
-  error: 'bg-red-100 text-red-800',
-};
+// ============================================================================
+// API CONFIG
+// ============================================================================
 
-const statusLabels = {
-  new: 'Novo',
-  calling: 'Ligando...',
-  contacted: 'Contatado',
-  no_answer: 'Não Atendeu',
-  interested: 'Interessado',
-  not_interested: 'Sem Interesse',
-  callback: 'Retornar',
-  error: 'Erro',
-};
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mmusa-production.up.railway.app';
+
+// ============================================================================
+// MAIN DASHBOARD COMPONENT
+// ============================================================================
 
 export default function Dashboard() {
+  const [activeTab, setActiveTab] = useState('leads');
   const [leads, setLeads] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editingLead, setEditingLead] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [callStatus, setCallStatus] = useState({});
-  const [systemStatus, setSystemStatus] = useState(null);
+  const [selectedLeads, setSelectedLeads] = useState(new Set());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
   
   // Form state
+  const [showForm, setShowForm] = useState(false);
+  const [editingLead, setEditingLead] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
-    country: 'US',
-    state: 'FL',
-    language: 'en',
-    fromNumber: '+13055700365',
-    notes: ''
+    email: '',
+    notes: '',
+    callContext: ''
   });
-
-  // Countries
-  const countries = [
-    { code: 'US', name: '🇺🇸 Estados Unidos', defaultLang: 'en' },
-    { code: 'BR', name: '🇧🇷 Brasil', defaultLang: 'pt' }
-  ];
-
-  // Twilio Numbers (adicione mais conforme comprar)
-  const twilioNumbers = [
-    { number: '+13055700365', label: '🇺🇸 +1 (305) 570-0365 - Miami', country: 'US' },
-    // Adicione números brasileiros aqui quando comprar:
-    // { number: '+5511999999999', label: '🇧🇷 +55 (11) 99999-9999 - São Paulo', country: 'BR' },
-  ];
-
-  // Languages
-  const languages = [
-    { code: 'en', name: '🇺🇸 English' },
-    { code: 'es', name: '🇪🇸 Español' },
-    { code: 'pt', name: '🇧🇷 Português' }
-  ];
-
-  // US States
-  const usStates = [
-    'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
-    'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
-    'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
-    'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
-    'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
-  ];
-
-  // Brazilian States
-  const brStates = [
-    'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
-    'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
-    'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
-  ];
-
-  // Get states based on country
-  const getStates = (country) => country === 'BR' ? brStates : usStates;
-
-  // Get available numbers for country
-  const getNumbersForCountry = (country) => {
-    const numbers = twilioNumbers.filter(n => n.country === country);
-    // If no number for this country, show all
-    return numbers.length > 0 ? numbers : twilioNumbers;
-  };
-
-  // Load leads from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('pool-leads');
-    if (saved) {
-      setLeads(JSON.parse(saved));
-    }
-    checkSystemStatus();
-  }, []);
-
-  // Save leads to localStorage
-  useEffect(() => {
-    localStorage.setItem('pool-leads', JSON.stringify(leads));
-  }, [leads]);
-
-  const checkSystemStatus = async () => {
+  
+  // Call settings
+  const [callLang, setCallLang] = useState('pt');
+  
+  // Queue status
+  const [queueStatus, setQueueStatus] = useState(null);
+  
+  // Prompts
+  const [prompts, setPrompts] = useState(null);
+  const [editingPromptLang, setEditingPromptLang] = useState('pt');
+  const [editingPromptType, setEditingPromptType] = useState('system');
+  const [promptText, setPromptText] = useState('');
+  
+  // Selected lead for calls view
+  const [selectedLeadForCalls, setSelectedLeadForCalls] = useState(null);
+  const [leadCalls, setLeadCalls] = useState([]);
+  
+  // ============================================================================
+  // API FUNCTIONS
+  // ============================================================================
+  
+  const fetchLeads = useCallback(async () => {
     try {
-      const res = await fetch('/api/calls/make');
+      setLoading(true);
+      const res = await fetch(`${API_URL}/api/leads`);
       const data = await res.json();
-      setSystemStatus(data);
-    } catch (error) {
-      setSystemStatus({ configured: false, error: error.message });
+      if (data.leads) {
+        setLeads(data.leads);
+      }
+    } catch (err) {
+      setError('Erro ao carregar leads: ' + err.message);
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const formatPhoneDisplay = (phone) => {
-    const cleaned = phone.replace(/\D/g, '');
-    if (cleaned.length === 10) {
-      return `(${cleaned.slice(0,3)}) ${cleaned.slice(3,6)}-${cleaned.slice(6)}`;
-    } else if (cleaned.length === 11 && cleaned.startsWith('1')) {
-      return `+1 (${cleaned.slice(1,4)}) ${cleaned.slice(4,7)}-${cleaned.slice(7)}`;
+  }, []);
+  
+  const fetchQueueStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/call/queue`);
+      const data = await res.json();
+      setQueueStatus(data);
+    } catch (err) {
+      console.error('Erro ao buscar status da fila:', err);
     }
-    return phone;
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  }, []);
+  
+  const fetchPrompts = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/prompts`);
+      const data = await res.json();
+      setPrompts(data);
+    } catch (err) {
+      setError('Erro ao carregar prompts: ' + err.message);
+    }
+  }, []);
+  
+  const fetchLeadCalls = useCallback(async (leadId) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_URL}/api/leads/${leadId}/calls`);
+      const data = await res.json();
+      if (data.calls) {
+        setLeadCalls(data.calls);
+      }
+    } catch (err) {
+      setError('Erro ao carregar chamadas: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  // ============================================================================
+  // EFFECTS
+  // ============================================================================
+  
+  useEffect(() => {
+    fetchLeads();
+    fetchQueueStatus();
     
-    if (editingLead) {
-      // Update existing
-      setLeads(prev => prev.map(l => 
-        l.id === editingLead.id 
-          ? { ...l, ...formData, updatedAt: new Date().toISOString() }
-          : l
-      ));
+    // Poll queue status every 3 seconds
+    const interval = setInterval(fetchQueueStatus, 3000);
+    return () => clearInterval(interval);
+  }, [fetchLeads, fetchQueueStatus]);
+  
+  useEffect(() => {
+    if (activeTab === 'prompts') {
+      fetchPrompts();
+    }
+  }, [activeTab, fetchPrompts]);
+  
+  useEffect(() => {
+    if (prompts && editingPromptType && editingPromptLang) {
+      const text = editingPromptType === 'system' 
+        ? prompts.active?.systemPrompts?.[editingPromptLang]
+        : prompts.active?.greetingInstructions?.[editingPromptLang];
+      setPromptText(text || '');
+    }
+  }, [prompts, editingPromptType, editingPromptLang]);
+  
+  // ============================================================================
+  // HANDLERS
+  // ============================================================================
+  
+  const handleSaveLead = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const url = editingLead 
+        ? `${API_URL}/api/leads/${editingLead.id}`
+        : `${API_URL}/api/leads`;
+      
+      const method = editingLead ? 'PUT' : 'POST';
+      
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      
+      if (!res.ok) throw new Error('Erro ao salvar lead');
+      
+      setSuccess(editingLead ? 'Lead atualizado!' : 'Lead criado!');
+      setShowForm(false);
       setEditingLead(null);
-    } else {
-      // Add new
-      const newLead = {
-        id: Date.now(),
-        ...formData,
-        status: 'new',
-        createdAt: new Date().toISOString(),
-        calls: []
-      };
-      setLeads(prev => [newLead, ...prev]);
+      setFormData({ name: '', phone: '', email: '', notes: '', callContext: '' });
+      fetchLeads();
+      
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
+  };
+  
+  const handleDeleteLead = async (leadId) => {
+    if (!confirm('Tem certeza que deseja excluir este lead?')) return;
     
-    setFormData({ name: '', phone: '', country: 'US', state: 'FL', language: 'en', fromNumber: '+13055700365', notes: '' });
-    setShowForm(false);
-  };
-
-  const deleteLead = (id) => {
-    if (confirm('Tem certeza que deseja excluir este lead?')) {
-      setLeads(prev => prev.filter(l => l.id !== id));
+    try {
+      setLoading(true);
+      await fetch(`${API_URL}/api/leads/${leadId}`, { method: 'DELETE' });
+      setSuccess('Lead excluído!');
+      fetchLeads();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
-
-  const editLead = (lead) => {
-    setFormData({
-      name: lead.name,
-      phone: lead.phone,
-      country: lead.country || 'US',
-      state: lead.state,
-      language: lead.language || 'en',
-      fromNumber: lead.fromNumber || '+13055700365',
-      notes: lead.notes || ''
-    });
+  
+  const handleEditLead = (lead) => {
     setEditingLead(lead);
+    setFormData({
+      name: lead.name || '',
+      phone: lead.phone || '',
+      email: lead.email || '',
+      notes: lead.notes || '',
+      callContext: lead.callContext || ''
+    });
     setShowForm(true);
   };
-
-  const makeCall = async (lead) => {
-    setIsLoading(true);
-    setCallStatus(prev => ({ ...prev, [lead.id]: { status: 'calling' } }));
-    
-    // Update lead status to calling
-    setLeads(prev => prev.map(l => 
-      l.id === lead.id ? { ...l, status: 'calling' } : l
-    ));
-
+  
+  const handleCallSingle = async (lead) => {
     try {
-      const res = await fetch('/api/calls/make', {
+      setLoading(true);
+      const res = await fetch(`${API_URL}/api/call`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lead })
+        body: JSON.stringify({
+          leadId: lead.id,
+          phone: lead.phone,
+          leadName: lead.name,
+          lang: callLang,
+          callContext: lead.callContext
+        })
       });
       
       const data = await res.json();
       
-      if (data.success) {
-        setCallStatus(prev => ({ 
-          ...prev, 
-          [lead.id]: { 
-            status: 'success', 
-            callSid: data.callSid,
-            message: 'Chamada iniciada!'
-          } 
-        }));
-        
-        // Update lead with call info
-        setLeads(prev => prev.map(l => 
-          l.id === lead.id 
-            ? { 
-                ...l, 
-                status: 'contacted',
-                lastCall: new Date().toISOString(),
-                calls: [...(l.calls || []), {
-                  callSid: data.callSid,
-                  date: new Date().toISOString(),
-                  status: data.status
-                }]
-              } 
-            : l
-        ));
+      if (res.ok) {
+        setSuccess(`Chamada iniciada para ${lead.name}!`);
       } else {
-        setCallStatus(prev => ({ 
-          ...prev, 
-          [lead.id]: { 
-            status: 'error', 
-            message: data.error || data.errors?.join(', ') || 'Erro desconhecido'
-          } 
-        }));
-        
-        setLeads(prev => prev.map(l => 
-          l.id === lead.id ? { ...l, status: 'error' } : l
-        ));
+        throw new Error(data.error);
       }
-    } catch (error) {
-      setCallStatus(prev => ({ 
-        ...prev, 
-        [lead.id]: { status: 'error', message: error.message } 
-      }));
       
-      setLeads(prev => prev.map(l => 
-        l.id === lead.id ? { ...l, status: 'error' } : l
-      ));
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err.message);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
-
-  const updateLeadStatus = (id, status) => {
-    setLeads(prev => prev.map(l => 
-      l.id === id ? { ...l, status } : l
-    ));
-  };
-
-  const clearAllLeads = () => {
-    if (confirm('Tem certeza que deseja excluir TODOS os leads?')) {
-      setLeads([]);
+  
+  const handleCallBatch = async () => {
+    if (selectedLeads.size === 0) {
+      setError('Selecione pelo menos um lead');
+      return;
+    }
+    
+    const leadsToCall = leads.filter(l => selectedLeads.has(l.id));
+    
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_URL}/api/call/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lang: callLang,
+          leads: leadsToCall.map(l => ({
+            leadId: l.id,
+            leadName: l.name,
+            phone: l.phone,
+            callContext: l.callContext
+          }))
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        setSuccess(`Fila de ${leadsToCall.length} chamadas iniciada!`);
+        setSelectedLeads(new Set());
+        setActiveTab('queue');
+      } else {
+        throw new Error(data.error);
+      }
+      
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
+  
+  const handleCancelQueue = async () => {
+    try {
+      await fetch(`${API_URL}/api/call/queue`, { method: 'DELETE' });
+      setSuccess('Fila cancelada!');
+      fetchQueueStatus();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  
+  const handleSavePrompt = async () => {
+    try {
+      setLoading(true);
+      const endpoint = editingPromptType === 'system' ? 'system' : 'greeting';
+      
+      const res = await fetch(`${API_URL}/api/prompts/${endpoint}/${editingPromptLang}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptText })
+      });
+      
+      if (!res.ok) throw new Error('Erro ao salvar prompt');
+      
+      setSuccess('Prompt salvo!');
+      fetchPrompts();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const toggleSelectLead = (leadId) => {
+    const newSelected = new Set(selectedLeads);
+    if (newSelected.has(leadId)) {
+      newSelected.delete(leadId);
+    } else {
+      newSelected.add(leadId);
+    }
+    setSelectedLeads(newSelected);
+  };
+  
+  const toggleSelectAll = () => {
+    if (selectedLeads.size === leads.length) {
+      setSelectedLeads(new Set());
+    } else {
+      setSelectedLeads(new Set(leads.map(l => l.id)));
+    }
+  };
+  
+  const handleViewCalls = (lead) => {
+    setSelectedLeadForCalls(lead);
+    fetchLeadCalls(lead.id);
+    setActiveTab('calls');
+  };
 
+  // Format date helper
+  const formatDate = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    try {
+      if (timestamp.toDate) {
+        return timestamp.toDate().toLocaleString('pt-BR');
+      }
+      if (timestamp._seconds) {
+        return new Date(timestamp._seconds * 1000).toLocaleString('pt-BR');
+      }
+      return new Date(timestamp).toLocaleString('pt-BR');
+    } catch {
+      return 'N/A';
+    }
+  };
+  
+  // ============================================================================
+  // RENDER
+  // ============================================================================
+  
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-900 text-white">
       {/* Header */}
-      <header className="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg">
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">🏊 Pool Leads AI Agent</h1>
-              <p className="text-blue-200 text-sm">Sistema de Chamadas Automatizadas</p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-blue-200">Status do Sistema</p>
-              <p className="font-semibold">
-                {systemStatus?.configured ? '🟢 Configurado' : '🔴 Não configurado'}
-              </p>
-            </div>
+      <header className="bg-gray-800 border-b border-gray-700 p-4">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-blue-400">🏊 Pool Leads AI</h1>
+            <p className="text-sm text-gray-400">Gestão de Leads e Chamadas Automatizadas</p>
           </div>
-        </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        {/* Action Bar */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                setShowForm(!showForm);
-                setEditingLead(null);
-                setFormData({ name: '', phone: '', country: 'US', state: 'FL', language: 'en', fromNumber: '+13055700365', notes: '' });
-              }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
-            >
-              {showForm ? '✕ Cancelar' : '+ Adicionar Lead'}
-            </button>
-            
-            <span className="text-gray-500">
-              {leads.length} lead{leads.length !== 1 ? 's' : ''} cadastrado{leads.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-
-          {leads.length > 0 && (
-            <button
-              onClick={clearAllLeads}
-              className="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded transition text-sm"
-            >
-              🗑️ Limpar Tudo
-            </button>
+          
+          {queueStatus?.isProcessing && (
+            <div className="bg-yellow-600 px-4 py-2 rounded-lg flex items-center gap-2">
+              <div className="animate-pulse w-3 h-3 bg-white rounded-full"></div>
+              <span>Ligando: {queueStatus.current?.leadName}</span>
+              <span className="text-sm">({queueStatus.pending} pendentes)</span>
+            </div>
           )}
         </div>
-
-        {/* Add/Edit Form */}
-        {showForm && (
-          <div className="bg-white rounded-xl shadow-sm border p-6 mb-6">
-            <h2 className="text-lg font-semibold mb-4">
-              {editingLead ? '✏️ Editar Lead' : '➕ Novo Lead'}
-            </h2>
-            
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nome
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="John Smith / João Silva"
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
+      </header>
+      
+      {/* Alerts */}
+      {error && (
+        <div className="max-w-7xl mx-auto mt-4 px-4">
+          <div className="bg-red-600 text-white p-3 rounded-lg flex justify-between">
+            <span>{error}</span>
+            <button onClick={() => setError(null)}>✕</button>
+          </div>
+        </div>
+      )}
+      
+      {success && (
+        <div className="max-w-7xl mx-auto mt-4 px-4">
+          <div className="bg-green-600 text-white p-3 rounded-lg flex justify-between">
+            <span>{success}</span>
+            <button onClick={() => setSuccess(null)}>✕</button>
+          </div>
+        </div>
+      )}
+      
+      {/* Tabs */}
+      <nav className="bg-gray-800 border-b border-gray-700">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex gap-1">
+            {[
+              { id: 'leads', label: '👥 Leads', count: leads.length },
+              { id: 'prompts', label: '📝 Prompts' },
+              { id: 'calls', label: '📞 Histórico' },
+              { id: 'queue', label: '📋 Fila', count: queueStatus?.pending }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-3 font-medium transition-colors ${
+                  activeTab === tab.id 
+                    ? 'bg-blue-600 text-white' 
+                    : 'text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                {tab.label}
+                {tab.count !== undefined && tab.count > 0 && (
+                  <span className="ml-2 bg-gray-600 px-2 py-0.5 rounded-full text-xs">
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </nav>
+      
+      {/* Content */}
+      <main className="max-w-7xl mx-auto p-4">
+        {/* ============== LEADS TAB ============== */}
+        {activeTab === 'leads' && (
+          <div>
+            {/* Actions Bar */}
+            <div className="flex flex-wrap gap-4 mb-6 items-center">
+              <button
+                onClick={() => { setShowForm(true); setEditingLead(null); setFormData({ name: '', phone: '', email: '', notes: '', callContext: '' }); }}
+                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium"
+              >
+                + Novo Lead
+              </button>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  📍 País
-                </label>
+              <div className="flex items-center gap-2">
+                <label className="text-gray-400">Idioma:</label>
                 <select
-                  value={formData.country}
-                  onChange={(e) => {
-                    const country = e.target.value;
-                    const defaultLang = countries.find(c => c.code === country)?.defaultLang || 'en';
-                    const defaultState = country === 'BR' ? 'SP' : 'FL';
-                    const numbers = getNumbersForCountry(country);
-                    setFormData(prev => ({ 
-                      ...prev, 
-                      country,
-                      state: defaultState,
-                      language: defaultLang,
-                      fromNumber: numbers[0]?.number || prev.fromNumber
-                    }));
-                  }}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={callLang}
+                  onChange={(e) => setCallLang(e.target.value)}
+                  className="bg-gray-700 border border-gray-600 rounded px-3 py-2"
                 >
-                  {countries.map(country => (
-                    <option key={country.code} value={country.code}>{country.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Telefone
-                </label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                  placeholder={formData.country === 'BR' ? '(11) 99999-9999' : '(305) 555-1234'}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Estado
-                </label>
-                <select
-                  value={formData.state}
-                  onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  {getStates(formData.country).map(state => (
-                    <option key={state} value={state}>{state}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  🌐 Idioma da Chamada
-                </label>
-                <select
-                  value={formData.language}
-                  onChange={(e) => setFormData(prev => ({ ...prev, language: e.target.value }))}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  {languages.map(lang => (
-                    <option key={lang.code} value={lang.code}>{lang.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  📞 Ligar de (Origem)
-                </label>
-                <select
-                  value={formData.fromNumber}
-                  onChange={(e) => setFormData(prev => ({ ...prev, fromNumber: e.target.value }))}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  {twilioNumbers.map(num => (
-                    <option key={num.number} value={num.number}>{num.label}</option>
-                  ))}
+                  <option value="pt">🇧🇷 Português</option>
+                  <option value="en">🇺🇸 English</option>
+                  <option value="es">🇪🇸 Español</option>
                 </select>
               </div>
               
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notas (opcional)
-                </label>
-                <input
-                  type="text"
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  placeholder="Interessado em piscina de fibra..."
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              
-              <div className="md:col-span-3">
+              {selectedLeads.size > 0 && (
                 <button
-                  type="submit"
-                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                  onClick={handleCallBatch}
+                  disabled={loading}
+                  className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-medium flex items-center gap-2"
                 >
-                  {editingLead ? '💾 Salvar Alterações' : '✓ Adicionar Lead'}
+                  📞 Ligar para {selectedLeads.size} selecionados
                 </button>
+              )}
+              
+              <button
+                onClick={fetchLeads}
+                disabled={loading}
+                className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg"
+              >
+                🔄 Atualizar
+              </button>
+            </div>
+            
+            {/* Lead Form Modal */}
+            {showForm && (
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                <div className="bg-gray-800 rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                  <h2 className="text-xl font-bold mb-4">
+                    {editingLead ? 'Editar Lead' : 'Novo Lead'}
+                  </h2>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">Nome *</label>
+                      <input
+                        type="text"
+                        value={formData.name}
+                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                        placeholder="João Silva"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">Telefone *</label>
+                      <input
+                        type="tel"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                        placeholder="+5511999999999"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">Email</label>
+                      <input
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                        placeholder="joao@email.com"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">Notas</label>
+                      <textarea
+                        value={formData.notes}
+                        onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                        rows={2}
+                        placeholder="Observações gerais sobre o lead"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">
+                        🎯 Contexto/Objetivo da Ligação
+                      </label>
+                      <textarea
+                        value={formData.callContext}
+                        onChange={(e) => setFormData({...formData, callContext: e.target.value})}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                        rows={3}
+                        placeholder="Ex: Este é o segundo contato. Tente descobrir o tamanho da piscina que ele quer e se tem espaço no quintal."
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Este contexto será adicionado ao prompt da IA para personalizar a conversa
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      onClick={() => { setShowForm(false); setEditingLead(null); }}
+                      className="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleSaveLead}
+                      disabled={loading || !formData.name || !formData.phone}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg disabled:opacity-50"
+                    >
+                      {loading ? 'Salvando...' : 'Salvar'}
+                    </button>
+                  </div>
+                </div>
               </div>
-            </form>
-          </div>
-        )}
-
-        {/* Leads List */}
-        {leads.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border p-12 text-center">
-            <div className="text-6xl mb-4">📋</div>
-            <h3 className="text-xl font-semibold text-gray-700 mb-2">Nenhum lead cadastrado</h3>
-            <p className="text-gray-500 mb-4">Adicione números de telefone para começar a fazer chamadas</p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              + Adicionar Primeiro Lead
-            </button>
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="text-left px-4 py-3 text-sm font-semibold text-gray-600">Nome</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold text-gray-600">Telefone</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold text-gray-600">Local</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold text-gray-600">🌐</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold text-gray-600">Status</th>
-                  <th className="text-right px-4 py-3 text-sm font-semibold text-gray-600">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {leads.map(lead => (
-                  <tr key={lead.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-gray-800">{lead.name}</span>
-                      {lead.notes && <p className="text-xs text-gray-400 truncate max-w-[150px]">{lead.notes}</p>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-gray-600 font-mono text-sm">
-                        {formatPhoneDisplay(lead.phone)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-gray-600">
-                        {lead.country === 'BR' ? '🇧🇷' : '🇺🇸'} {lead.state}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-lg" title={lead.language === 'en' ? 'English' : lead.language === 'es' ? 'Español' : 'Português'}>
-                        {lead.language === 'en' ? '🇺🇸' : lead.language === 'es' ? '🇪🇸' : lead.language === 'pt' ? '🇧🇷' : '🇺🇸'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={lead.status}
-                        onChange={(e) => updateLeadStatus(lead.id, e.target.value)}
-                        className={`px-2 py-1 rounded-full text-xs font-medium border-0 cursor-pointer ${statusColors[lead.status]}`}
-                      >
-                        {Object.entries(statusLabels).map(([value, label]) => (
-                          <option key={value} value={value}>{label}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        {/* Call Status Message */}
-                        {callStatus[lead.id] && (
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            callStatus[lead.id].status === 'success' 
-                              ? 'bg-green-100 text-green-700'
-                              : callStatus[lead.id].status === 'error'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-yellow-100 text-yellow-700'
+            )}
+            
+            {/* Leads Table */}
+            <div className="bg-gray-800 rounded-xl overflow-hidden overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-700">
+                  <tr>
+                    <th className="p-3 text-left">
+                      <input
+                        type="checkbox"
+                        checked={selectedLeads.size === leads.length && leads.length > 0}
+                        onChange={toggleSelectAll}
+                        className="w-4 h-4"
+                      />
+                    </th>
+                    <th className="p-3 text-left">Nome</th>
+                    <th className="p-3 text-left">Telefone</th>
+                    <th className="p-3 text-left hidden md:table-cell">Contexto</th>
+                    <th className="p-3 text-left hidden lg:table-cell">Última Intenção</th>
+                    <th className="p-3 text-left hidden lg:table-cell">Chamadas</th>
+                    <th className="p-3 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leads.map(lead => (
+                    <tr key={lead.id} className="border-t border-gray-700 hover:bg-gray-750">
+                      <td className="p-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedLeads.has(lead.id)}
+                          onChange={() => toggleSelectLead(lead.id)}
+                          className="w-4 h-4"
+                        />
+                      </td>
+                      <td className="p-3">
+                        <div className="font-medium">{lead.name || '(sem nome)'}</div>
+                        {lead.email && <div className="text-sm text-gray-400">{lead.email}</div>}
+                      </td>
+                      <td className="p-3 font-mono text-sm">{lead.phone}</td>
+                      <td className="p-3 hidden md:table-cell">
+                        {lead.callContext ? (
+                          <span className="text-sm text-yellow-400" title={lead.callContext}>
+                            🎯 {lead.callContext.substring(0, 30)}...
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">-</span>
+                        )}
+                      </td>
+                      <td className="p-3 hidden lg:table-cell">
+                        {lead.lastIntent && (
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            lead.lastIntent === 'purchase' ? 'bg-green-600' :
+                            lead.lastIntent === 'not_interested' ? 'bg-red-600' :
+                            lead.lastIntent === 'maintenance' ? 'bg-blue-600' :
+                            'bg-gray-600'
                           }`}>
-                            {callStatus[lead.id].message || 'Ligando...'}
+                            {lead.lastIntent}
                           </span>
                         )}
-                        
-                        <button
-                          onClick={() => makeCall(lead)}
-                          disabled={isLoading || lead.status === 'calling'}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                            isLoading || lead.status === 'calling'
-                              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                              : 'bg-green-500 hover:bg-green-600 text-white'
-                          }`}
-                        >
-                          {lead.status === 'calling' ? '📞 Ligando...' : '📞 Ligar'}
-                        </button>
-                        
-                        <button
-                          onClick={() => editLead(lead)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition"
-                          title="Editar"
-                        >
-                          ✏️
-                        </button>
-                        
-                        <button
-                          onClick={() => deleteLead(lead.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
-                          title="Excluir"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </td>
+                      <td className="p-3 hidden lg:table-cell">
+                        {lead.totalCalls || 0}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex gap-2 justify-end flex-wrap">
+                          <button
+                            onClick={() => handleCallSingle(lead)}
+                            disabled={loading}
+                            className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm"
+                            title="Ligar agora"
+                          >
+                            📞
+                          </button>
+                          <button
+                            onClick={() => handleViewCalls(lead)}
+                            className="bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded text-sm"
+                            title="Ver chamadas"
+                          >
+                            📋
+                          </button>
+                          <button
+                            onClick={() => handleEditLead(lead)}
+                            className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm"
+                            title="Editar"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLead(lead.id)}
+                            className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm"
+                            title="Excluir"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {leads.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-gray-400">
+                        Nenhum lead cadastrado. Clique em &quot;+ Novo Lead&quot; para começar.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
-
-        {/* Quick Info */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-xl shadow-sm border p-4">
-            <h3 className="font-semibold text-gray-700 mb-2">📞 Números Disponíveis</h3>
-            <div className="space-y-1">
-              {twilioNumbers.map(num => (
-                <p key={num.number} className="text-sm font-mono text-blue-600">{num.label}</p>
-              ))}
-            </div>
-            <p className="text-xs text-gray-400 mt-2">Adicione mais números no código</p>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-sm border p-4">
-            <h3 className="font-semibold text-gray-700 mb-2">🌎 Países Suportados</h3>
-            <div className="flex gap-4">
-              <div className="text-center">
-                <span className="text-2xl">🇺🇸</span>
-                <p className="text-xs text-gray-500">EUA</p>
+        
+        {/* ============== PROMPTS TAB ============== */}
+        {activeTab === 'prompts' && (
+          <div className="max-w-4xl">
+            <h2 className="text-xl font-bold mb-4">📝 Gerenciar Prompts da IA</h2>
+            
+            <div className="bg-gray-800 rounded-xl p-6">
+              <div className="flex flex-wrap gap-4 mb-6">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Tipo</label>
+                  <select
+                    value={editingPromptType}
+                    onChange={(e) => setEditingPromptType(e.target.value)}
+                    className="bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                  >
+                    <option value="system">System Prompt (Instruções Gerais)</option>
+                    <option value="greeting">Saudação Inicial</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Idioma</label>
+                  <select
+                    value={editingPromptLang}
+                    onChange={(e) => setEditingPromptLang(e.target.value)}
+                    className="bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                  >
+                    <option value="pt">🇧🇷 Português</option>
+                    <option value="en">🇺🇸 English</option>
+                    <option value="es">🇪🇸 Español</option>
+                  </select>
+                </div>
               </div>
-              <div className="text-center">
-                <span className="text-2xl">🇧🇷</span>
-                <p className="text-xs text-gray-500">Brasil</p>
-              </div>
-            </div>
-            <p className="text-sm text-gray-500 mt-2">🤖 IA: EN | ES | PT</p>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-sm border p-4">
-            <h3 className="font-semibold text-gray-700 mb-2">📊 Estatísticas</h3>
-            <div className="flex gap-4 text-sm">
+              
               <div>
-                <span className="text-2xl font-bold text-blue-600">{leads.length}</span>
-                <p className="text-gray-500">Total</p>
+                <label className="block text-sm text-gray-400 mb-1">
+                  {editingPromptType === 'system' ? 'System Prompt' : 'Instrução de Saudação'}
+                </label>
+                <textarea
+                  value={promptText}
+                  onChange={(e) => setPromptText(e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 font-mono text-sm"
+                  rows={15}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {editingPromptType === 'greeting' 
+                    ? 'Use {name} para incluir o nome do lead dinamicamente'
+                    : 'Este prompt define o comportamento geral da IA durante toda a ligação'
+                  }
+                </p>
               </div>
-              <div>
-                <span className="text-2xl font-bold text-green-600">
-                  {leads.filter(l => l.status === 'contacted' || l.status === 'interested').length}
+              
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={handleSavePrompt}
+                  disabled={loading}
+                  className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg"
+                >
+                  {loading ? 'Salvando...' : 'Salvar Prompt'}
+                </button>
+                
+                <button
+                  onClick={fetchPrompts}
+                  className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg"
+                >
+                  🔄 Recarregar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* ============== CALLS/HISTORY TAB ============== */}
+        {activeTab === 'calls' && (
+          <div>
+            <div className="flex items-center gap-4 mb-4">
+              <h2 className="text-xl font-bold">📞 Histórico de Chamadas</h2>
+              
+              {selectedLeadForCalls && (
+                <span className="bg-blue-600 px-3 py-1 rounded-lg">
+                  {selectedLeadForCalls.name}
                 </span>
-                <p className="text-gray-500">Contatados</p>
-              </div>
-              <div>
-                <span className="text-2xl font-bold text-orange-600">
-                  {leads.filter(l => l.status === 'new').length}
-                </span>
-                <p className="text-gray-500">Novos</p>
-              </div>
+              )}
+              
+              {!selectedLeadForCalls && (
+                <p className="text-gray-400">Selecione um lead na aba Leads para ver suas chamadas</p>
+              )}
             </div>
+            
+            {selectedLeadForCalls && (
+              <div className="space-y-4">
+                {leadCalls.map(call => (
+                  <div key={call.id} className="bg-gray-800 rounded-xl p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <span className={`px-2 py-1 rounded text-xs mr-2 ${
+                          call.status === 'completed' ? 'bg-green-600' : 'bg-gray-600'
+                        }`}>
+                          {call.status}
+                        </span>
+                        <span className="text-gray-400 text-sm">
+                          {formatDate(call.startedAt)}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-gray-400">Duração: {call.duration || 0}s</div>
+                        {call.intent && (
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            call.intent === 'purchase' ? 'bg-green-600' :
+                            call.intent === 'not_interested' ? 'bg-red-600' :
+                            'bg-gray-600'
+                          }`}>
+                            {call.intent}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {call.callContext && (
+                      <div className="bg-yellow-900/30 border border-yellow-700 rounded p-2 mb-3">
+                        <span className="text-xs text-yellow-400">🎯 Contexto:</span>
+                        <p className="text-sm">{call.callContext}</p>
+                      </div>
+                    )}
+                    
+                    {call.transcript && call.transcript.length > 0 && (
+                      <div className="bg-gray-900 rounded p-3 mt-3">
+                        <h4 className="text-sm font-medium text-gray-400 mb-2">Transcrição:</h4>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {call.transcript.map((msg, idx) => (
+                            <div key={idx} className={`text-sm ${
+                              msg.role === 'assistant' ? 'text-blue-400' : 'text-green-400'
+                            }`}>
+                              <span className="font-medium">
+                                {msg.role === 'assistant' ? '🤖 IA:' : '👤 Cliente:'}
+                              </span>{' '}
+                              {msg.text}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {call.summary && (
+                      <div className="mt-3 text-sm text-gray-400">
+                        <strong>Resumo:</strong> {call.summary}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                
+                {leadCalls.length === 0 && (
+                  <div className="bg-gray-800 rounded-xl p-8 text-center text-gray-400">
+                    Nenhuma chamada registrada para este lead.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-
-        {/* Instructions */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-6">
-          <h3 className="font-semibold text-blue-800 mb-3">💡 Como usar</h3>
-          <ol className="list-decimal list-inside space-y-2 text-blue-700">
-            <li>Selecione o <strong>país</strong> do lead (🇺🇸 EUA ou 🇧🇷 Brasil)</li>
-            <li>Adicione nome, telefone e estado</li>
-            <li>Escolha o <strong>idioma</strong> da conversa e o <strong>número de origem</strong></li>
-            <li>Clique em <strong>"📞 Ligar"</strong> para iniciar a chamada</li>
-            <li>A IA vai conversar com o lead no idioma selecionado</li>
-          </ol>
-          <p className="text-xs text-blue-600 mt-4">
-            💡 Para adicionar número brasileiro: compre no Twilio e adicione em <code>twilioNumbers</code> no código
-          </p>
-        </div>
+        )}
+        
+        {/* ============== QUEUE TAB ============== */}
+        {activeTab === 'queue' && (
+          <div className="max-w-2xl">
+            <h2 className="text-xl font-bold mb-4">📋 Fila de Chamadas</h2>
+            
+            {queueStatus ? (
+              <div className="space-y-4">
+                {/* Status Card */}
+                <div className={`rounded-xl p-6 ${
+                  queueStatus.isProcessing ? 'bg-yellow-900/30 border border-yellow-600' : 'bg-gray-800'
+                }`}>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-medium">
+                        {queueStatus.isProcessing ? '🔄 Em andamento' : '⏸️ Parada'}
+                      </h3>
+                      {queueStatus.current && (
+                        <p className="text-gray-300 mt-1">
+                          Ligando para: <strong>{queueStatus.current.leadName}</strong>
+                          <br />
+                          <span className="text-sm text-gray-400">{queueStatus.current.phone}</span>
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="text-right">
+                      <div className="text-3xl font-bold text-blue-400">{queueStatus.pending}</div>
+                      <div className="text-sm text-gray-400">pendentes</div>
+                    </div>
+                  </div>
+                  
+                  {queueStatus.isProcessing && (
+                    <button
+                      onClick={handleCancelQueue}
+                      className="mt-4 bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg w-full"
+                    >
+                      🛑 Cancelar Fila
+                    </button>
+                  )}
+                </div>
+                
+                {/* Results */}
+                {queueStatus.results && queueStatus.results.length > 0 && (
+                  <div className="bg-gray-800 rounded-xl p-4">
+                    <h4 className="font-medium mb-3">Resultados ({queueStatus.completedCount} completas)</h4>
+                    <div className="space-y-2">
+                      {queueStatus.results.map((result, idx) => (
+                        <div key={idx} className="flex justify-between items-center bg-gray-700 rounded p-2">
+                          <span>{result.leadId}</span>
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            result.status === 'completed' ? 'bg-green-600' :
+                            result.status === 'failed' ? 'bg-red-600' :
+                            'bg-gray-600'
+                          }`}>
+                            {result.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-gray-800 rounded-xl p-8 text-center text-gray-400">
+                Carregando status da fila...
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
