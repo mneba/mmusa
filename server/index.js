@@ -253,27 +253,30 @@ wss.on('connection', (twilioWs, request) => {
       const systemPrompt = SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.en;
       const voice = VOICES[lang] || VOICES.en;
       
-      // Configurar sessão - usando formato que funcionou anteriormente
+      // Configurar sessão - API GA (nova estrutura)
       openAiWs.send(JSON.stringify({
         type: 'session.update',
         session: {
           type: 'realtime',
-          modalities: ['text', 'audio'],
           instructions: systemPrompt,
-          voice: voice,
-          input_audio_format: 'g711_ulaw',
-          output_audio_format: 'g711_ulaw',
-          input_audio_transcription: {
-            model: 'whisper-1'
+          audio: {
+            input: {
+              format: { type: 'audio/g711-ulaw', sample_rate: 8000 },
+              transcription: { model: 'whisper-1' }
+            },
+            output: {
+              format: { type: 'audio/g711-ulaw', sample_rate: 8000 },
+              voice: voice
+            }
           },
           turn_detection: {
             type: 'server_vad',
             threshold: 0.5,
             prefix_padding_ms: 300,
-            silence_duration_ms: 600
-          },
-          temperature: 0.8,
-          max_response_output_tokens: 4096
+            silence_duration_ms: 600,
+            create_response: true,
+            interrupt_response: true
+          }
         }
       }));
       
