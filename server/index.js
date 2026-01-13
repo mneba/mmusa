@@ -1,10 +1,13 @@
 /**
  * Pool Leads AI Agent - WebSocket Server v14
  * 
- * v14: CORREÇÃO IDIOMAS - Separação completa promptLang vs leadLanguage
+ * v14: CORREÇÃO IDIOMAS + DADOS DO LEAD
  *      - promptLang (lang): define qual SCRIPT/PROMPT a IA usa
  *      - leadLanguage: define qual IDIOMA a IA FALA na conversa
  *      - Voz OpenAI agora usa leadLanguage, não promptLang
+ *      - Dados do lead (nome, email, endereço) são enviados para a IA
+ *      - IA não pergunta idioma (já definido no cadastro)
+ *      - IA usa apenas dados reais, nunca inventa
  * 
  * v13: Backend salva TODOS os campos do frontend
  *      - status, language, street, city, state, zipCode
@@ -390,7 +393,8 @@ const DEFAULT_GREETING_INSTRUCTIONS = {
 // Obter prompt do sistema (com contexto específico se fornecido)
 // promptLang = idioma do SCRIPT (instruções)
 // leadLanguage = idioma que a IA deve FALAR
-async function getSystemPrompt(promptLang, callContext = null, leadLanguage = null) {
+// leadData = dados cadastrados do lead (nome, email, endereço, etc)
+async function getSystemPrompt(promptLang, callContext = null, leadLanguage = null, leadData = null) {
   const customPrompts = await getPrompts();
   
   let basePrompt;
@@ -398,6 +402,32 @@ async function getSystemPrompt(promptLang, callContext = null, leadLanguage = nu
     basePrompt = customPrompts.systemPrompts[promptLang];
   } else {
     basePrompt = DEFAULT_SYSTEM_PROMPTS[promptLang] || DEFAULT_SYSTEM_PROMPTS.en;
+  }
+  
+  // CRÍTICO: Adicionar dados REAIS do lead ao prompt
+  // A IA DEVE usar APENAS estes dados, NUNCA inventar
+  if (leadData) {
+    basePrompt += `\n\n## DADOS DO LEAD (USE APENAS ESTES DADOS - NUNCA INVENTE)`;
+    if (leadData.name) basePrompt += `\nNome completo: ${leadData.name}`;
+    if (leadData.email) basePrompt += `\nEmail: ${leadData.email}`;
+    if (leadData.phone) basePrompt += `\nTelefone: ${leadData.phone}`;
+    
+    // Endereço
+    const hasAddress = leadData.street || leadData.city || leadData.state || leadData.zipCode;
+    if (hasAddress) {
+      basePrompt += `\nEndereço cadastrado:`;
+      if (leadData.street) basePrompt += ` ${leadData.street},`;
+      if (leadData.city) basePrompt += ` ${leadData.city},`;
+      if (leadData.state) basePrompt += ` ${leadData.state}`;
+      if (leadData.zipCode) basePrompt += ` ${leadData.zipCode}`;
+    } else {
+      basePrompt += `\nEndereço: NÃO CADASTRADO (você DEVE perguntar)`;
+    }
+    
+    if (leadData.notes) basePrompt += `\nNotas: ${leadData.notes}`;
+    if (leadData.aiSummary) basePrompt += `\nResumo anterior: ${leadData.aiSummary}`;
+    
+    basePrompt += `\n\nIMPORTANTE: Se algum dado acima estiver vazio ou não cadastrado, você DEVE perguntar ao cliente. NUNCA invente dados.`;
   }
   
   // Se há contexto específico, adicionar ao prompt
@@ -411,6 +441,11 @@ async function getSystemPrompt(promptLang, callContext = null, leadLanguage = nu
     const targetLang = languageNames[leadLanguage] || 'English';
     basePrompt += `\n\n## IDIOMA DA CONVERSA\nIMPORTANTE: O cliente fala ${targetLang}. Você DEVE conduzir toda a conversa em ${targetLang}, independente do idioma destas instruções.`;
   }
+  
+  // Adicionar instrução sobre idioma já definido
+  const languageNames = { en: 'English', es: 'Spanish', pt: 'Portuguese' };
+  const conversationLang = languageNames[leadLanguage || promptLang] || 'English';
+  basePrompt += `\n\n## NOTA SOBRE IDIOMA\nO idioma da conversa já foi definido como ${conversationLang}. NÃO pergunte ao cliente qual idioma ele prefere - simplesmente conduza a conversa em ${conversationLang}.`;
   
   return basePrompt;
 }
@@ -794,11 +829,34 @@ fastify.post('/api/call', async (request, reply) => {
     const promptLang = lang || 'en';
     const conversationLang = leadLanguage || promptLang;
     
+    // Buscar dados completos do lead do Firebase
+    let leadData = null;
+    if (leadId && db) {
+      const lead = await getLeadById(leadId);
+      if (lead) {
+        leadData = {
+          name: lead.name || '',
+          email: lead.email || '',
+          phone: lead.phone || phone,
+          street: lead.street || '',
+          city: lead.city || '',
+          state: lead.state || '',
+          zipCode: lead.zipCode || '',
+          notes: lead.notes || '',
+          aiSummary: lead.aiSummary || ''
+        };
+        console.log(`📋 Dados do lead carregados:`, JSON.stringify(leadData));
+      }
+    }
+    
     console.log(`📞 Iniciando chamada: ${leadName || phone}`);
     console.log(`   📜 Prompt: ${promptLang.toUpperCase()}, 🗣️ Conversa: ${conversationLang.toUpperCase()}`);
     
+    // Encode leadData como JSON para passar via URL
+    const leadDataParam = leadData ? encodeURIComponent(JSON.stringify(leadData)) : '';
+    
     const call = await twilioClient.calls.create({
-      url: `https://${host}/incoming-call?lang=${promptLang}&leadLanguage=${conversationLang}&leadId=${leadId || ''}&leadName=${encodeURIComponent(leadName || '')}&callContext=${encodeURIComponent(callContext || '')}`,
+      url: `https://${host}/incoming-call?lang=${promptLang}&leadLanguage=${conversationLang}&leadId=${leadId || ''}&leadName=${encodeURIComponent(leadName || '')}&callContext=${encodeURIComponent(callContext || '')}&leadData=${leadDataParam}`,
       to: phone,
       from: TWILIO_PHONE_NUMBER,
       statusCallback: `https://${host}/call-status`,
@@ -1078,7 +1136,8 @@ wss.on('connection', (twilioWs, request) => {
   // Conectar ao OpenAI
   // promptLang = idioma do SCRIPT/PROMPT
   // leadLang = idioma que o LEAD fala (voz da conversa)
-  const connectToOpenAI = async (promptLang, leadLang, name, context) => {
+  // leadData = dados completos do lead (nome, email, endereço, etc)
+  const connectToOpenAI = async (promptLang, leadLang, name, context, leadData = null) => {
     currentPromptLang = promptLang;
     currentLeadLang = leadLang;
     leadName = name;
@@ -1088,10 +1147,11 @@ wss.on('connection', (twilioWs, request) => {
     console.log(`   📜 Idioma Prompt: ${promptLang.toUpperCase()}`);
     console.log(`   🗣️ Idioma Conversa: ${leadLang.toUpperCase()}`);
     if (name) console.log(`   👤 Lead: ${name}`);
+    if (leadData?.email) console.log(`   📧 Email: ${leadData.email}`);
     if (context) console.log(`   🎯 Contexto: ${context.substring(0, 50)}...`);
     
-    // Carregar prompt com contexto específico E instrução de idioma
-    const systemPrompt = await getSystemPrompt(promptLang, context, leadLang);
+    // Carregar prompt com contexto específico, instrução de idioma E dados do lead
+    const systemPrompt = await getSystemPrompt(promptLang, context, leadLang, leadData);
     // Voz usa idioma do LEAD (não do prompt!)
     const voice = VOICES[leadLang] || VOICES.en;
     
@@ -1265,19 +1325,38 @@ wss.on('connection', (twilioWs, request) => {
           console.log(`   🗣️ Idioma Lead: ${leadLang.toUpperCase()}`);
           if (leadName) console.log(`   👤 Lead: ${leadName}`);
           if (callContext) console.log(`   🎯 Contexto: ${callContext.substring(0, 50)}...`);
-          console.log('═══════════════════════════════════════════════════════');
           
+          // Buscar dados COMPLETOS do lead do Firebase
+          let leadData = null;
           if (db && leadId) {
+            const lead = await getLeadById(leadId);
+            if (lead) {
+              leadData = {
+                name: lead.name || leadName || '',
+                email: lead.email || '',
+                phone: lead.phone || '',
+                street: lead.street || '',
+                city: lead.city || '',
+                state: lead.state || '',
+                zipCode: lead.zipCode || '',
+                notes: lead.notes || '',
+                aiSummary: lead.aiSummary || ''
+              };
+              console.log(`   📋 Dados do lead carregados: ${leadData.name}, ${leadData.email || 'sem email'}`);
+              if (leadData.city) console.log(`   🏠 Endereço: ${leadData.street}, ${leadData.city}, ${leadData.state} ${leadData.zipCode}`);
+            }
+            
             callDbId = await createCallRecord(leadId, {
               callSid,
               promptLang: promptLang,
               language: leadLang,
               callContext: callContext || ''
             });
-            console.log(`💾 Registro criado: ${callDbId}`);
+            console.log(`   💾 Registro criado: ${callDbId}`);
           }
+          console.log('═══════════════════════════════════════════════════════');
           
-          await connectToOpenAI(promptLang, leadLang, leadName, callContext);
+          await connectToOpenAI(promptLang, leadLang, leadName, callContext, leadData);
           break;
 
         case 'media':
@@ -1372,9 +1451,10 @@ const startServer = async () => {
 ║  🌐 IDIOMAS: EN, ES, PT                                              ║
 ║  📜 promptLang = idioma do SCRIPT (instruções da IA)                 ║
 ║  🗣️ leadLanguage = idioma da CONVERSA (voz da IA)                    ║
+║  📋 Dados do lead são carregados do Firebase automaticamente         ║
 ║                                                                      ║
 ║  📞 CHAMADAS:                                                        ║
-║     POST /api/call        - Chamada única                            ║
+║     POST /api/call        - Chamada única (busca dados do lead)      ║
 ║     POST /api/call/batch  - Chamadas em série                        ║
 ║     GET  /api/call/queue  - Status da fila                           ║
 ║     DELETE /api/call/queue - Cancelar fila                           ║
