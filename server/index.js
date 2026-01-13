@@ -31,7 +31,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import Twilio from 'twilio';
 
 // ============================================================================
-// CONFIGURATION
+// CONFIG
 // ============================================================================
 
 const PORT = process.env.PORT || 8080;
