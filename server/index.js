@@ -1,7 +1,12 @@
 /**
- * Pool Leads AI Agent - WebSocket Server v13
+ * Pool Leads AI Agent - WebSocket Server v14
  * 
- * v13: CORREÇÃO CRÍTICA - Backend agora salva TODOS os campos do frontend
+ * v14: CORREÇÃO IDIOMAS - Separação completa promptLang vs leadLanguage
+ *      - promptLang (lang): define qual SCRIPT/PROMPT a IA usa
+ *      - leadLanguage: define qual IDIOMA a IA FALA na conversa
+ *      - Voz OpenAI agora usa leadLanguage, não promptLang
+ * 
+ * v13: Backend salva TODOS os campos do frontend
  *      - status, language, street, city, state, zipCode
  *      - objectiveId, objectiveName, nextStep, aiSummary
  * 
@@ -122,14 +127,15 @@ async function processNextCall(serverHost) {
   callQueue.isProcessing = true;
   callQueue.current = callQueue.queue.shift();
   
-  const { leadId, leadName, phone, lang, callContext } = callQueue.current;
+  const { leadId, leadName, phone, lang, leadLanguage, callContext } = callQueue.current;
   
   console.log(`📞 Iniciando chamada para: ${leadName} (${phone})`);
+  console.log(`   📜 Prompt: ${lang?.toUpperCase() || 'EN'}, 🗣️ Conversa: ${leadLanguage?.toUpperCase() || lang?.toUpperCase() || 'EN'}`);
   
   try {
     // Fazer chamada via Twilio
     const call = await twilioClient.calls.create({
-      url: `https://${serverHost}/incoming-call?lang=${lang}&leadId=${leadId}&leadName=${encodeURIComponent(leadName)}&callContext=${encodeURIComponent(callContext || '')}`,
+      url: `https://${serverHost}/incoming-call?lang=${lang || 'en'}&leadLanguage=${leadLanguage || lang || 'en'}&leadId=${leadId}&leadName=${encodeURIComponent(leadName)}&callContext=${encodeURIComponent(callContext || '')}`,
       to: phone,
       from: TWILIO_PHONE_NUMBER,
       statusCallback: `https://${serverHost}/call-status-batch?batchId=${callQueue.batchId}&leadId=${leadId}`,
@@ -382,14 +388,16 @@ const DEFAULT_GREETING_INSTRUCTIONS = {
 };
 
 // Obter prompt do sistema (com contexto específico se fornecido)
-async function getSystemPrompt(lang, callContext = null) {
+// promptLang = idioma do SCRIPT (instruções)
+// leadLanguage = idioma que a IA deve FALAR
+async function getSystemPrompt(promptLang, callContext = null, leadLanguage = null) {
   const customPrompts = await getPrompts();
   
   let basePrompt;
-  if (customPrompts?.systemPrompts?.[lang]) {
-    basePrompt = customPrompts.systemPrompts[lang];
+  if (customPrompts?.systemPrompts?.[promptLang]) {
+    basePrompt = customPrompts.systemPrompts[promptLang];
   } else {
-    basePrompt = DEFAULT_SYSTEM_PROMPTS[lang] || DEFAULT_SYSTEM_PROMPTS.en;
+    basePrompt = DEFAULT_SYSTEM_PROMPTS[promptLang] || DEFAULT_SYSTEM_PROMPTS.en;
   }
   
   // Se há contexto específico, adicionar ao prompt
@@ -397,19 +405,30 @@ async function getSystemPrompt(lang, callContext = null) {
     basePrompt += `\n\n## OBJETIVO ESPECÍFICO DESTA LIGAÇÃO\n${callContext}`;
   }
   
+  // CRÍTICO: Se o idioma do lead é diferente do prompt, instruir a IA a falar no idioma correto
+  if (leadLanguage && leadLanguage !== promptLang) {
+    const languageNames = { en: 'English', es: 'Spanish', pt: 'Portuguese' };
+    const targetLang = languageNames[leadLanguage] || 'English';
+    basePrompt += `\n\n## IDIOMA DA CONVERSA\nIMPORTANTE: O cliente fala ${targetLang}. Você DEVE conduzir toda a conversa em ${targetLang}, independente do idioma destas instruções.`;
+  }
+  
   return basePrompt;
 }
 
 // Obter instruções de saudação
-async function getGreetingInstructions(lang, leadName, callContext = null) {
+// leadLanguage é usado para a saudação (idioma que a IA fala)
+async function getGreetingInstructions(promptLang, leadName, callContext = null, leadLanguage = null) {
   const name = leadName ? leadName.split(' ')[0] : '';
   const customPrompts = await getPrompts();
   
+  // Usar o idioma do LEAD para a saudação (não o do prompt)
+  const greetingLang = leadLanguage || promptLang;
+  
   let baseGreeting;
-  if (customPrompts?.greetingInstructions?.[lang]) {
-    baseGreeting = customPrompts.greetingInstructions[lang];
+  if (customPrompts?.greetingInstructions?.[greetingLang]) {
+    baseGreeting = customPrompts.greetingInstructions[greetingLang];
   } else {
-    baseGreeting = DEFAULT_GREETING_INSTRUCTIONS[lang] || DEFAULT_GREETING_INSTRUCTIONS.en;
+    baseGreeting = DEFAULT_GREETING_INSTRUCTIONS[greetingLang] || DEFAULT_GREETING_INSTRUCTIONS.en;
   }
   
   // Substituir nome
@@ -423,6 +442,12 @@ async function getGreetingInstructions(lang, leadName, callContext = null) {
   // Adicionar contexto específico à saudação se houver
   if (callContext && callContext.trim()) {
     baseGreeting += ` Remember the specific goal: ${callContext}`;
+  }
+  
+  // Reforçar idioma da conversa
+  if (leadLanguage && leadLanguage !== promptLang) {
+    const languageNames = { en: 'English', es: 'Spanish', pt: 'Portuguese' };
+    baseGreeting += ` IMPORTANT: Speak in ${languageNames[leadLanguage] || 'English'} throughout the entire conversation.`;
   }
   
   return baseGreeting;
@@ -442,10 +467,11 @@ await fastify.register(fastifyCors, {
 // Rota raiz
 fastify.get('/', async (request, reply) => {
   return { 
-    status: 'Pool Leads AI Agent v13 - Online',
+    status: 'Pool Leads AI Agent v14 - Online',
     model: OPENAI_MODEL,
-    features: ['multi-language', 'firebase', 'transcriptions', 'lead-personalization', 'call-context', 'batch-calling'],
+    features: ['multi-language', 'dual-language-support', 'firebase', 'transcriptions', 'lead-personalization', 'call-context', 'batch-calling'],
     languages: ['en', 'es', 'pt'],
+    languageNote: 'promptLang = script language, leadLanguage = conversation language',
     firebase: db ? 'connected' : 'not configured',
     twilio: twilioClient ? 'connected' : 'not configured',
     queue: {
@@ -460,22 +486,27 @@ fastify.get('/', async (request, reply) => {
 // WEBHOOK TWILIO - CHAMADAS
 // ============================================================================
 
-// Webhook para chamadas - agora com callContext
+// Webhook para chamadas - agora com callContext e leadLanguage separado
 fastify.all('/incoming-call', async (request, reply) => {
   const callSid = request.body?.CallSid || 'unknown';
   const from = request.body?.From || 'unknown';
   const to = request.body?.To || 'unknown';
   
+  // lang = idioma do PROMPT (script)
+  // leadLanguage = idioma que o LEAD fala (para a conversa)
   const lang = request.query?.lang || 'en';
+  const leadLanguage = request.query?.leadLanguage || lang; // Se não especificado, usa o mesmo do prompt
   const leadId = request.query?.leadId || null;
   const leadName = request.query?.leadName ? decodeURIComponent(request.query.leadName) : null;
   const callContext = request.query?.callContext ? decodeURIComponent(request.query.callContext) : null;
   
   const validLang = ['en', 'es', 'pt'].includes(lang) ? lang : 'en';
+  const validLeadLang = ['en', 'es', 'pt'].includes(leadLanguage) ? leadLanguage : validLang;
   
   console.log(`📞 Nova chamada: ${callSid}`);
   console.log(`   De: ${from} → Para: ${to}`);
-  console.log(`   🌐 Idioma: ${validLang.toUpperCase()}`);
+  console.log(`   📜 Idioma Prompt: ${validLang.toUpperCase()}`);
+  console.log(`   🗣️ Idioma Lead: ${validLeadLang.toUpperCase()}`);
   if (leadName) console.log(`   👤 Lead: ${leadName}`);
   if (callContext) console.log(`   🎯 Contexto: ${callContext.substring(0, 50)}...`);
 
@@ -489,6 +520,7 @@ fastify.all('/incoming-call', async (request, reply) => {
       <Parameter name="from" value="${from}" />
       <Parameter name="to" value="${to}" />
       <Parameter name="lang" value="${validLang}" />
+      <Parameter name="leadLanguage" value="${validLeadLang}" />
       <Parameter name="leadId" value="${leadId || ''}" />
       <Parameter name="leadName" value="${leadName || ''}" />
       <Parameter name="callContext" value="${callContext || ''}" />
@@ -536,7 +568,7 @@ fastify.post('/call-status-batch', async (request, reply) => {
 // API - LEADS
 // ============================================================================
 
-// Criar/Atualizar lead - CORRIGIDO v13: aceita TODOS os campos
+// Criar/Atualizar lead
 fastify.post('/api/leads', async (request, reply) => {
   if (!db) {
     return reply.status(503).send({ error: 'Firebase not configured' });
@@ -550,7 +582,7 @@ fastify.post('/api/leads', async (request, reply) => {
       return reply.status(400).send({ error: 'Phone is required' });
     }
     
-    // Campos permitidos (todos os campos do frontend v13)
+    // Campos permitidos (todos os campos do frontend v13+)
     const allowedFields = [
       'name', 'phone', 'email', 'source', 'notes', 'callContext',
       'status', 'language', 'promptLang',
@@ -619,7 +651,7 @@ fastify.post('/api/leads', async (request, reply) => {
   }
 });
 
-// Atualizar lead - CORRIGIDO v13: aceita TODOS os campos
+// Atualizar lead - aceita TODOS os campos v13+
 fastify.put('/api/leads/:leadId', async (request, reply) => {
   if (!db) {
     return reply.status(503).send({ error: 'Firebase not configured' });
@@ -629,7 +661,7 @@ fastify.put('/api/leads/:leadId', async (request, reply) => {
     const { leadId } = request.params;
     const body = request.body;
     
-    // Campos permitidos (todos os campos do frontend v13)
+    // Campos permitidos (todos os campos do frontend v13+)
     const allowedFields = [
       'name', 'phone', 'email', 'source', 'notes', 'callContext',
       'status', 'language', 'promptLang',
@@ -751,16 +783,22 @@ fastify.post('/api/call', async (request, reply) => {
   }
   
   try {
-    const { leadId, phone, leadName, lang, callContext } = request.body;
+    // lang = idioma do PROMPT, leadLanguage = idioma que o lead FALA
+    const { leadId, phone, leadName, lang, leadLanguage, callContext } = request.body;
     
     if (!phone) {
       return reply.status(400).send({ error: 'Phone is required' });
     }
     
     const host = request.headers.host;
+    const promptLang = lang || 'en';
+    const conversationLang = leadLanguage || promptLang;
+    
+    console.log(`📞 Iniciando chamada: ${leadName || phone}`);
+    console.log(`   📜 Prompt: ${promptLang.toUpperCase()}, 🗣️ Conversa: ${conversationLang.toUpperCase()}`);
     
     const call = await twilioClient.calls.create({
-      url: `https://${host}/incoming-call?lang=${lang || 'en'}&leadId=${leadId || ''}&leadName=${encodeURIComponent(leadName || '')}&callContext=${encodeURIComponent(callContext || '')}`,
+      url: `https://${host}/incoming-call?lang=${promptLang}&leadLanguage=${conversationLang}&leadId=${leadId || ''}&leadName=${encodeURIComponent(leadName || '')}&callContext=${encodeURIComponent(callContext || '')}`,
       to: phone,
       from: TWILIO_PHONE_NUMBER,
       statusCallback: `https://${host}/call-status`,
@@ -819,11 +857,13 @@ fastify.post('/api/call/batch', async (request, reply) => {
     }
     
     // Preparar chamadas para fila
+    // lang = idioma do PROMPT, leadLanguage = idioma que o lead FALA
     const calls = leads.map(lead => ({
       leadId: lead.leadId,
       leadName: lead.leadName,
       phone: lead.phone,
       lang: lead.lang || lang || 'en',
+      leadLanguage: lead.leadLanguage || lead.lang || lang || 'en',
       callContext: lead.callContext || ''
     }));
     
@@ -1025,7 +1065,8 @@ wss.on('connection', (twilioWs, request) => {
   let audioBuffer = [];
   let messageCount = 0;
   let audioPacketsSent = 0;
-  let currentLang = 'en';
+  let currentPromptLang = 'en';
+  let currentLeadLang = 'en';
   
   let leadId = null;
   let leadName = null;
@@ -1035,19 +1076,24 @@ wss.on('connection', (twilioWs, request) => {
   let transcript = [];
 
   // Conectar ao OpenAI
-  const connectToOpenAI = async (lang, name, context) => {
-    currentLang = lang;
+  // promptLang = idioma do SCRIPT/PROMPT
+  // leadLang = idioma que o LEAD fala (voz da conversa)
+  const connectToOpenAI = async (promptLang, leadLang, name, context) => {
+    currentPromptLang = promptLang;
+    currentLeadLang = leadLang;
     leadName = name;
     callContext = context;
     
     console.log('🤖 Conectando ao OpenAI...');
-    console.log(`   🌐 Idioma: ${lang.toUpperCase()}`);
+    console.log(`   📜 Idioma Prompt: ${promptLang.toUpperCase()}`);
+    console.log(`   🗣️ Idioma Conversa: ${leadLang.toUpperCase()}`);
     if (name) console.log(`   👤 Lead: ${name}`);
     if (context) console.log(`   🎯 Contexto: ${context.substring(0, 50)}...`);
     
-    // Carregar prompt com contexto específico
-    const systemPrompt = await getSystemPrompt(lang, context);
-    const voice = VOICES[lang] || VOICES.en;
+    // Carregar prompt com contexto específico E instrução de idioma
+    const systemPrompt = await getSystemPrompt(promptLang, context, leadLang);
+    // Voz usa idioma do LEAD (não do prompt!)
+    const voice = VOICES[leadLang] || VOICES.en;
     
     openAiWs = new WebSocket(OPENAI_REALTIME_URL, {
       headers: { 
@@ -1058,6 +1104,7 @@ wss.on('connection', (twilioWs, request) => {
 
     openAiWs.on('open', () => {
       console.log('✅ OpenAI CONECTADO!');
+      console.log(`   🔊 Voz: ${voice} (baseado no idioma do lead: ${leadLang.toUpperCase()})`);
       
       openAiWs.send(JSON.stringify({
         type: 'session.update',
@@ -1104,7 +1151,8 @@ wss.on('connection', (twilioWs, request) => {
           
           setTimeout(async () => {
             console.log('🎙️ Solicitando saudação da IA...');
-            const greetingInstructions = await getGreetingInstructions(currentLang, leadName, callContext);
+            // Passa promptLang, leadName, context e leadLang
+            const greetingInstructions = await getGreetingInstructions(currentPromptLang, leadName, callContext, currentLeadLang);
             openAiWs.send(JSON.stringify({
               type: 'response.create',
               response: {
@@ -1202,7 +1250,9 @@ wss.on('connection', (twilioWs, request) => {
         case 'start':
           streamSid = data.start.streamSid;
           callSid = data.start.customParameters?.callSid;
-          const lang = data.start.customParameters?.lang || 'en';
+          // lang = idioma do PROMPT, leadLanguage = idioma que o LEAD fala
+          const promptLang = data.start.customParameters?.lang || 'en';
+          const leadLang = data.start.customParameters?.leadLanguage || promptLang;
           leadId = data.start.customParameters?.leadId || null;
           leadName = data.start.customParameters?.leadName || null;
           callContext = data.start.customParameters?.callContext || null;
@@ -1211,7 +1261,8 @@ wss.on('connection', (twilioWs, request) => {
           console.log('🎬 STREAM INICIADO!');
           console.log(`   StreamSid: ${streamSid}`);
           console.log(`   CallSid: ${callSid}`);
-          console.log(`   🌐 Idioma: ${lang.toUpperCase()}`);
+          console.log(`   📜 Idioma Prompt: ${promptLang.toUpperCase()}`);
+          console.log(`   🗣️ Idioma Lead: ${leadLang.toUpperCase()}`);
           if (leadName) console.log(`   👤 Lead: ${leadName}`);
           if (callContext) console.log(`   🎯 Contexto: ${callContext.substring(0, 50)}...`);
           console.log('═══════════════════════════════════════════════════════');
@@ -1219,13 +1270,14 @@ wss.on('connection', (twilioWs, request) => {
           if (db && leadId) {
             callDbId = await createCallRecord(leadId, {
               callSid,
-              language: lang,
+              promptLang: promptLang,
+              language: leadLang,
               callContext: callContext || ''
             });
             console.log(`💾 Registro criado: ${callDbId}`);
           }
           
-          await connectToOpenAI(lang, leadName, callContext);
+          await connectToOpenAI(promptLang, leadLang, leadName, callContext);
           break;
 
         case 'media':
@@ -1310,7 +1362,7 @@ const startServer = async () => {
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`
 ╔══════════════════════════════════════════════════════════════════════╗
-║          🏊 POOL LEADS AI AGENT - WebSocket Server v13 🏊            ║
+║          🏊 POOL LEADS AI AGENT - WebSocket Server v14 🏊            ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║  Server: http://0.0.0.0:${PORT}                                         ║
 ║  Model: ${OPENAI_MODEL}                                           ║
@@ -1318,6 +1370,8 @@ const startServer = async () => {
 ║  Twilio: ${twilioClient ? '✅ Connected' : '⚠️ Not configured'}                                               ║
 ║                                                                      ║
 ║  🌐 IDIOMAS: EN, ES, PT                                              ║
+║  📜 promptLang = idioma do SCRIPT (instruções da IA)                 ║
+║  🗣️ leadLanguage = idioma da CONVERSA (voz da IA)                    ║
 ║                                                                      ║
 ║  📞 CHAMADAS:                                                        ║
 ║     POST /api/call        - Chamada única                            ║
@@ -1329,7 +1383,7 @@ const startServer = async () => {
 ║     POST   /api/leads          - Criar lead                          ║
 ║     GET    /api/leads          - Listar leads                        ║
 ║     GET    /api/leads/:id      - Buscar lead                         ║
-║     PUT    /api/leads/:id      - Atualizar lead                      ║
+║     PUT    /api/leads/:id      - Atualizar lead (todos os campos)    ║
 ║     DELETE /api/leads/:id      - Deletar lead                        ║
 ║     GET    /api/leads/:id/calls - Chamadas do lead                   ║
 ║                                                                      ║
