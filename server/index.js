@@ -1,9 +1,14 @@
 /**
- * Pool Leads AI Agent - WebSocket Server v12
+ * Pool Leads AI Agent - WebSocket Server v13
  * 
- * NOVO: Contexto específico por chamada (sobrepõe prompt padrão)
- * NOVO: Chamadas em série (batch calling)
- * NOVO: Fila de chamadas com status em tempo real
+ * v13: CORREÇÃO CRÍTICA - Backend agora salva TODOS os campos do frontend
+ *      - status, language, street, city, state, zipCode
+ *      - objectiveId, objectiveName, nextStep, aiSummary
+ * 
+ * v12: Contexto específico por chamada (callContext)
+ *      Chamadas em série (batch calling)
+ *      Fila de chamadas com status em tempo real
+ * 
  * Firebase Firestore para transcrições e dados
  * Personalização com nome do lead
  */
@@ -437,7 +442,7 @@ await fastify.register(fastifyCors, {
 // Rota raiz
 fastify.get('/', async (request, reply) => {
   return { 
-    status: 'Pool Leads AI Agent v12 - Online',
+    status: 'Pool Leads AI Agent v13 - Online',
     model: OPENAI_MODEL,
     features: ['multi-language', 'firebase', 'transcriptions', 'lead-personalization', 'call-context', 'batch-calling'],
     languages: ['en', 'es', 'pt'],
@@ -531,52 +536,90 @@ fastify.post('/call-status-batch', async (request, reply) => {
 // API - LEADS
 // ============================================================================
 
-// Criar/Atualizar lead
+// Criar/Atualizar lead - CORRIGIDO v13: aceita TODOS os campos
 fastify.post('/api/leads', async (request, reply) => {
   if (!db) {
     return reply.status(503).send({ error: 'Firebase not configured' });
   }
   
   try {
-    const { name, phone, email, source, notes, callContext } = request.body;
+    const body = request.body;
+    const { phone } = body;
     
     if (!phone) {
       return reply.status(400).send({ error: 'Phone is required' });
     }
     
+    // Campos permitidos (todos os campos do frontend v13)
+    const allowedFields = [
+      'name', 'phone', 'email', 'source', 'notes', 'callContext',
+      'status', 'language', 'promptLang',
+      'street', 'city', 'state', 'zipCode',
+      'objectiveId', 'objectiveName',
+      'nextStep', 'aiSummary'
+    ];
+    
+    // Filtrar apenas campos definidos (não undefined)
+    const filterDefined = (obj, fields) => {
+      const result = {};
+      for (const field of fields) {
+        if (obj[field] !== undefined) {
+          result[field] = obj[field];
+        }
+      }
+      return result;
+    };
+    
     const existing = await getLeadByPhone(phone);
     
     if (existing) {
-      await db.collection('leads').doc(existing.id).update({
-        name: name || existing.name,
-        email: email || existing.email,
-        notes: notes || existing.notes,
-        callContext: callContext !== undefined ? callContext : existing.callContext,
+      // UPDATE: merge campos recebidos
+      const updateData = {
+        ...filterDefined(body, allowedFields),
         updatedAt: FieldValue.serverTimestamp()
-      });
+      };
+      
+      await db.collection('leads').doc(existing.id).update(updateData);
+      console.log(`✅ Lead atualizado (POST): ${existing.id}`, Object.keys(updateData));
       return { id: existing.id, updated: true };
     } else {
-      const docRef = await db.collection('leads').add({
-        name: name || '',
+      // CREATE: novo lead com todos os campos
+      const createData = {
+        name: body.name || '',
         phone,
-        email: email || '',
-        source: source || 'manual',
-        notes: notes || '',
-        callContext: callContext || '',
+        email: body.email || '',
+        source: body.source || 'manual',
+        notes: body.notes || '',
+        callContext: body.callContext || '',
+        status: body.status || 'new',
+        language: body.language || 'en',
+        promptLang: body.promptLang || body.language || 'en',
+        street: body.street || '',
+        city: body.city || '',
+        state: body.state || '',
+        zipCode: body.zipCode || '',
+        objectiveId: body.objectiveId || null,
+        objectiveName: body.objectiveName || '',
+        nextStep: body.nextStep || '',
+        aiSummary: body.aiSummary || '',
         createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         lastContactAt: null,
         lastIntent: null,
         totalCalls: 0
-      });
+      };
+      
+      const docRef = await db.collection('leads').add(createData);
+      console.log(`✅ Lead criado: ${docRef.id}`, Object.keys(createData));
       return { id: docRef.id, created: true };
     }
   } catch (error) {
-    console.error('Erro ao criar lead:', error);
+    console.error('❌ Erro ao criar lead:', error);
     return reply.status(500).send({ error: error.message });
   }
 });
 
-// Atualizar lead
+// Atualizar lead - CORRIGIDO v13: aceita TODOS os campos
 fastify.put('/api/leads/:leadId', async (request, reply) => {
   if (!db) {
     return reply.status(503).send({ error: 'Firebase not configured' });
@@ -584,19 +627,32 @@ fastify.put('/api/leads/:leadId', async (request, reply) => {
   
   try {
     const { leadId } = request.params;
-    const { name, phone, email, notes, callContext } = request.body;
+    const body = request.body;
     
+    // Campos permitidos (todos os campos do frontend v13)
+    const allowedFields = [
+      'name', 'phone', 'email', 'source', 'notes', 'callContext',
+      'status', 'language', 'promptLang',
+      'street', 'city', 'state', 'zipCode',
+      'objectiveId', 'objectiveName',
+      'nextStep', 'aiSummary'
+    ];
+    
+    // Construir updateData apenas com campos definidos
     const updateData = { updatedAt: FieldValue.serverTimestamp() };
-    if (name !== undefined) updateData.name = name;
-    if (phone !== undefined) updateData.phone = phone;
-    if (email !== undefined) updateData.email = email;
-    if (notes !== undefined) updateData.notes = notes;
-    if (callContext !== undefined) updateData.callContext = callContext;
+    
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) {
+        updateData[field] = body[field];
+      }
+    }
     
     await db.collection('leads').doc(leadId).update(updateData);
+    console.log(`✅ Lead atualizado (PUT): ${leadId}`, Object.keys(updateData));
     
     return { id: leadId, updated: true };
   } catch (error) {
+    console.error('❌ Erro ao atualizar lead:', error);
     return reply.status(500).send({ error: error.message });
   }
 });
@@ -1254,7 +1310,7 @@ const startServer = async () => {
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`
 ╔══════════════════════════════════════════════════════════════════════╗
-║          🏊 POOL LEADS AI AGENT - WebSocket Server v12 🏊            ║
+║          🏊 POOL LEADS AI AGENT - WebSocket Server v13 🏊            ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║  Server: http://0.0.0.0:${PORT}                                         ║
 ║  Model: ${OPENAI_MODEL}                                           ║
