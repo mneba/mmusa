@@ -31,7 +31,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import Twilio from 'twilio';
 
 // ============================================================================
-// CONFIG
+// CONFIGURATION
 // ============================================================================
 
 const PORT = process.env.PORT || 8080;
@@ -404,48 +404,106 @@ async function getSystemPrompt(promptLang, callContext = null, leadLanguage = nu
     basePrompt = DEFAULT_SYSTEM_PROMPTS[promptLang] || DEFAULT_SYSTEM_PROMPTS.en;
   }
   
-  // CRÍTICO: Adicionar dados REAIS do lead ao prompt
-  // A IA DEVE usar APENAS estes dados, NUNCA inventar
-  if (leadData) {
-    basePrompt += `\n\n## DADOS DO LEAD (USE APENAS ESTES DADOS - NUNCA INVENTE)`;
-    if (leadData.name) basePrompt += `\nNome completo: ${leadData.name}`;
-    if (leadData.email) basePrompt += `\nEmail: ${leadData.email}`;
-    if (leadData.phone) basePrompt += `\nTelefone: ${leadData.phone}`;
-    
-    // Endereço
-    const hasAddress = leadData.street || leadData.city || leadData.state || leadData.zipCode;
-    if (hasAddress) {
-      basePrompt += `\nEndereço cadastrado:`;
-      if (leadData.street) basePrompt += ` ${leadData.street},`;
-      if (leadData.city) basePrompt += ` ${leadData.city},`;
-      if (leadData.state) basePrompt += ` ${leadData.state}`;
-      if (leadData.zipCode) basePrompt += ` ${leadData.zipCode}`;
-    } else {
-      basePrompt += `\nEndereço: NÃO CADASTRADO (você DEVE perguntar)`;
-    }
-    
-    if (leadData.notes) basePrompt += `\nNotas: ${leadData.notes}`;
-    if (leadData.aiSummary) basePrompt += `\nResumo anterior: ${leadData.aiSummary}`;
-    
-    basePrompt += `\n\nIMPORTANTE: Se algum dado acima estiver vazio ou não cadastrado, você DEVE perguntar ao cliente. NUNCA invente dados.`;
+  // CRÍTICO: Criar checklist estruturado de dados
+  basePrompt += `\n\n` + `=`.repeat(60);
+  basePrompt += `\n## 📋 CHECKLIST DE DADOS - SIGA NA ORDEM`;
+  basePrompt += `\n` + `=`.repeat(60);
+  basePrompt += `\n⚠️ REGRAS ABSOLUTAS:`;
+  basePrompt += `\n1. NUNCA invente dados - use APENAS o que está listado abaixo`;
+  basePrompt += `\n2. Siga o checklist NA ORDEM`;
+  basePrompt += `\n3. Faça UMA pergunta por vez e AGUARDE resposta`;
+  basePrompt += `\n4. Marque mentalmente cada item como ✅ completo antes de avançar`;
+  
+  // Determinar status de cada campo
+  const temNome = leadData?.name && leadData.name.trim();
+  const temEmail = leadData?.email && leadData.email.trim();
+  const temEndereco = (leadData?.street && leadData.street.trim()) || (leadData?.city && leadData.city.trim());
+  
+  basePrompt += `\n\n### CHECKLIST (siga esta ordem exata):`;
+  
+  // 1. NOME
+  basePrompt += `\n\n**1️⃣ NOME COMPLETO**`;
+  if (temNome) {
+    basePrompt += `\n   📌 Status: CADASTRADO = "${leadData.name}"`;
+    basePrompt += `\n   ✅ Ação: CONFIRMAR → "I have your name as ${leadData.name}, is that correct?"`;
+    basePrompt += `\n   Se incorreto: peça o nome correto`;
+  } else {
+    basePrompt += `\n   📌 Status: ❌ NÃO CADASTRADO`;
+    basePrompt += `\n   🔴 Ação: PERGUNTAR (OBRIGATÓRIO) → "Could I get your full name please?"`;
+    basePrompt += `\n   ⚠️ NÃO PULE - você DEVE coletar o nome`;
+  }
+  
+  // 2. EMAIL
+  basePrompt += `\n\n**2️⃣ EMAIL**`;
+  if (temEmail) {
+    basePrompt += `\n   📌 Status: CADASTRADO = "${leadData.email}"`;
+    basePrompt += `\n   ✅ Ação: CONFIRMAR → "And your email is ${leadData.email}, correct?"`;
+    basePrompt += `\n   Se incorreto: peça o email correto`;
+  } else {
+    basePrompt += `\n   📌 Status: ❌ NÃO CADASTRADO`;
+    basePrompt += `\n   🔴 Ação: PERGUNTAR (OBRIGATÓRIO) → "What's the best email address to reach you?"`;
+    basePrompt += `\n   ⚠️ NÃO PULE - você DEVE coletar o email`;
+  }
+  
+  // 3. ENDEREÇO
+  basePrompt += `\n\n**3️⃣ ENDEREÇO DA PROPRIEDADE**`;
+  if (temEndereco) {
+    const endereco = [leadData.street, leadData.city, leadData.state, leadData.zipCode].filter(Boolean).join(', ');
+    basePrompt += `\n   📌 Status: CADASTRADO = "${endereco}"`;
+    basePrompt += `\n   ✅ Ação: CONFIRMAR → "I have your property address as ${endereco}, is that correct?"`;
+    basePrompt += `\n   Se incorreto: peça o endereço correto`;
+  } else {
+    basePrompt += `\n   📌 Status: ❌ NÃO CADASTRADO`;
+    basePrompt += `\n   🔴 Ação: PERGUNTAR (OBRIGATÓRIO) → "What is the property address where you're considering the pool?"`;
+    basePrompt += `\n   ⚠️ NÃO PULE - você DEVE coletar o endereço`;
+  }
+  
+  // Telefone (informativo)
+  if (leadData?.phone) {
+    basePrompt += `\n\n**📞 TELEFONE** (apenas referência)`;
+    basePrompt += `\n   Este é o número da ligação atual: ${leadData.phone}`;
+  }
+  
+  // Resumo visual
+  const pendentes = [];
+  if (!temNome) pendentes.push('Nome');
+  if (!temEmail) pendentes.push('Email');
+  if (!temEndereco) pendentes.push('Endereço');
+  
+  if (pendentes.length > 0) {
+    basePrompt += `\n\n` + `⚠️`.repeat(3) + ` ATENÇÃO ` + `⚠️`.repeat(3);
+    basePrompt += `\n🔴 DADOS QUE VOCÊ DEVE COLETAR: ${pendentes.join(', ')}`;
+    basePrompt += `\nNÃO encerre a ligação sem coletar TODOS estes dados!`;
+  }
+  
+  basePrompt += `\n` + `=`.repeat(60);
+  
+  // Notas adicionais se existirem
+  if (leadData?.notes && leadData.notes.trim()) {
+    basePrompt += `\n\n### 📝 NOTAS SOBRE O CLIENTE:\n${leadData.notes}`;
+  }
+  
+  // Histórico se existir
+  if (leadData?.aiSummary && leadData.aiSummary.trim()) {
+    basePrompt += `\n\n### 📜 HISTÓRICO DE CONTATOS ANTERIORES:\n${leadData.aiSummary}`;
   }
   
   // Se há contexto específico, adicionar ao prompt
   if (callContext && callContext.trim()) {
-    basePrompt += `\n\n## OBJETIVO ESPECÍFICO DESTA LIGAÇÃO\n${callContext}`;
+    basePrompt += `\n\n## 🎯 OBJETIVO ESPECÍFICO DESTA LIGAÇÃO\n${callContext}`;
   }
   
   // CRÍTICO: Se o idioma do lead é diferente do prompt, instruir a IA a falar no idioma correto
   if (leadLanguage && leadLanguage !== promptLang) {
     const languageNames = { en: 'English', es: 'Spanish', pt: 'Portuguese' };
     const targetLang = languageNames[leadLanguage] || 'English';
-    basePrompt += `\n\n## IDIOMA DA CONVERSA\nIMPORTANTE: O cliente fala ${targetLang}. Você DEVE conduzir toda a conversa em ${targetLang}, independente do idioma destas instruções.`;
+    basePrompt += `\n\n## 🗣️ IDIOMA DA CONVERSA\nIMPORTANTE: O cliente fala ${targetLang}. Você DEVE conduzir toda a conversa em ${targetLang}, independente do idioma destas instruções.`;
   }
   
   // Adicionar instrução sobre idioma já definido
   const languageNames = { en: 'English', es: 'Spanish', pt: 'Portuguese' };
   const conversationLang = languageNames[leadLanguage || promptLang] || 'English';
-  basePrompt += `\n\n## NOTA SOBRE IDIOMA\nO idioma da conversa já foi definido como ${conversationLang}. NÃO pergunte ao cliente qual idioma ele prefere - simplesmente conduza a conversa em ${conversationLang}.`;
+  basePrompt += `\n\n## 🚫 IDIOMA JÁ DEFINIDO\nO idioma é ${conversationLang}. NÃO pergunte "do you prefer English or Spanish" - conduza toda a conversa em ${conversationLang}.`;
   
   return basePrompt;
 }
@@ -1146,8 +1204,19 @@ wss.on('connection', (twilioWs, request) => {
     console.log('🤖 Conectando ao OpenAI...');
     console.log(`   📜 Idioma Prompt: ${promptLang.toUpperCase()}`);
     console.log(`   🗣️ Idioma Conversa: ${leadLang.toUpperCase()}`);
-    if (name) console.log(`   👤 Lead: ${name}`);
-    if (leadData?.email) console.log(`   📧 Email: ${leadData.email}`);
+    
+    // Log detalhado dos dados do lead
+    if (leadData) {
+      console.log('   📋 DADOS DO LEAD:');
+      console.log(`      Nome: ${leadData.name || '❌ NÃO CADASTRADO'}`);
+      console.log(`      Email: ${leadData.email || '❌ NÃO CADASTRADO'}`);
+      console.log(`      Telefone: ${leadData.phone || '❌ NÃO CADASTRADO'}`);
+      const endereco = [leadData.street, leadData.city, leadData.state, leadData.zipCode].filter(Boolean).join(', ');
+      console.log(`      Endereço: ${endereco || '❌ NÃO CADASTRADO'}`);
+    } else {
+      console.log('   ⚠️ Nenhum dado do lead carregado');
+    }
+    
     if (context) console.log(`   🎯 Contexto: ${context.substring(0, 50)}...`);
     
     // Carregar prompt com contexto específico, instrução de idioma E dados do lead
