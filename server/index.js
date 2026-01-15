@@ -1,13 +1,16 @@
 /**
  * Pool Leads AI Agent - WebSocket Server v14
  * 
- * v14: CORREÇÃO IDIOMAS + DADOS DO LEAD
+ * v14: CORREÇÃO IDIOMAS + DADOS DO LEAD + SETTINGS
  *      - promptLang (lang): define qual SCRIPT/PROMPT a IA usa
  *      - leadLanguage: define qual IDIOMA a IA FALA na conversa
  *      - Voz OpenAI agora usa leadLanguage, não promptLang
  *      - Dados do lead (nome, email, endereço) são enviados para a IA
  *      - IA não pergunta idioma (já definido no cadastro)
  *      - IA usa apenas dados reais, nunca inventa
+ *      - Checklist estruturado: CONFIRMAR ou COLETAR dados
+ *      - Nome da empresa carregado dinamicamente do Firebase
+ *      - Endpoints GET/PUT /api/settings para configurações
  * 
  * v13: Backend salva TODOS os campos do frontend
  *      - status, language, street, city, state, zipCode
@@ -174,6 +177,35 @@ let promptsCache = null;
 let promptsCacheTime = 0;
 const PROMPTS_CACHE_TTL = 5 * 60 * 1000;
 
+// Cache de company name
+let companyNameCache = null;
+let companyNameCacheTime = 0;
+const COMPANY_NAME_CACHE_TTL = 5 * 60 * 1000;
+
+// Carregar nome da empresa (dinâmico)
+async function getCompanyName() {
+  // Verificar cache
+  if (companyNameCache && (Date.now() - companyNameCacheTime) < COMPANY_NAME_CACHE_TTL) {
+    return companyNameCache;
+  }
+  
+  if (!db) return COMPANY_NAME; // Fallback para env var
+  
+  try {
+    const doc = await db.collection('settings').doc('company').get();
+    if (doc.exists && doc.data().companyName) {
+      companyNameCache = doc.data().companyName;
+      companyNameCacheTime = Date.now();
+      console.log('🏢 Nome da empresa carregado:', companyNameCache);
+      return companyNameCache;
+    }
+    return COMPANY_NAME; // Fallback
+  } catch (error) {
+    console.error('❌ Erro ao carregar nome da empresa:', error.message);
+    return COMPANY_NAME; // Fallback
+  }
+}
+
 // Carregar prompts do Firebase
 async function getPrompts() {
   if (promptsCache && (Date.now() - promptsCacheTime) < PROMPTS_CACHE_TTL) {
@@ -314,10 +346,11 @@ async function finalizeCall(leadId, callId, duration, summary, intent) {
 
 // ============================================================================
 // PROMPTS PADRÃO
+// Usar {COMPANY_NAME} como placeholder - será substituído dinamicamente
 // ============================================================================
 
 const DEFAULT_SYSTEM_PROMPTS = {
-  en: `You are a friendly and professional AI assistant from ${COMPANY_NAME}, a residential pool installation company in the United States.
+  en: `You are a friendly and professional AI assistant from {COMPANY_NAME}, a residential pool installation company in the United States.
 
 ## YOUR ROLE
 You are calling people who have shown interest in pool installation. Your goal is to qualify leads and schedule technical visits.
@@ -339,7 +372,7 @@ You are calling people who have shown interest in pool installation. Your goal i
 - Be warm but professional
 - Listen more than you talk`,
 
-  es: `Eres un asistente de IA amigable y profesional de ${COMPANY_NAME}, una empresa de instalación de piscinas residenciales en Estados Unidos.
+  es: `Eres un asistente de IA amigable y profesional de {COMPANY_NAME}, una empresa de instalación de piscinas residenciales en Estados Unidos.
 
 ## TU ROL
 Estás llamando a personas que han mostrado interés en instalar una piscina. Tu objetivo es calificar leads y agendar visitas técnicas.
@@ -361,7 +394,7 @@ Estás llamando a personas que han mostrado interés en instalar una piscina. Tu
 - Sé cálido pero profesional
 - Escucha más de lo que hablas`,
 
-  pt: `Você é um assistente de IA amigável e profissional da ${COMPANY_NAME}, uma empresa de instalação de piscinas residenciais nos Estados Unidos.
+  pt: `Você é um assistente de IA amigável e profissional da {COMPANY_NAME}, uma empresa de instalação de piscinas residenciais nos Estados Unidos.
 
 ## SEU PAPEL
 Você está ligando para pessoas que demonstraram interesse em instalar uma piscina. Seu objetivo é qualificar leads e agendar visitas técnicas.
@@ -385,9 +418,9 @@ Você está ligando para pessoas que demonstraram interesse em instalar uma pisc
 };
 
 const DEFAULT_GREETING_INSTRUCTIONS = {
-  en: `Start the call naturally. Say "Hi!" warmly. Introduce yourself as calling from ${COMPANY_NAME} about their pool installation interest. Mention briefly that the call may be recorded. Then ask if they have a moment to chat. Keep it warm and conversational.`,
-  es: `Comienza la llamada de forma natural. Saluda diciendo "¡Hola!" con calidez. Preséntate como llamando de ${COMPANY_NAME} sobre su interés en piscinas. Menciona brevemente que la llamada puede ser grabada. Luego pregunta si tienen un momento para hablar.`,
-  pt: `Comece a ligação de forma natural. Diga "Oi!" de forma calorosa. Se apresente como ligando da ${COMPANY_NAME} sobre o interesse em piscina. Mencione brevemente que a ligação pode ser gravada. Depois pergunte se a pessoa tem um momento para conversar.`
+  en: `Start the call naturally. Say "Hi!" warmly. Introduce yourself as calling from {COMPANY_NAME} about their pool installation interest. Mention briefly that the call may be recorded. Then ask if they have a moment to chat. Keep it warm and conversational.`,
+  es: `Comienza la llamada de forma natural. Saluda diciendo "¡Hola!" con calidez. Preséntate como llamando de {COMPANY_NAME} sobre su interés en piscinas. Menciona brevemente que la llamada puede ser grabada. Luego pregunta si tienen un momento para hablar.`,
+  pt: `Comece a ligação de forma natural. Diga "Oi!" de forma calorosa. Se apresente como ligando da {COMPANY_NAME} sobre o interesse em piscina. Mencione brevemente que a ligação pode ser gravada. Depois pergunte se a pessoa tem um momento para conversar.`
 };
 
 // Obter prompt do sistema (com contexto específico se fornecido)
@@ -397,12 +430,18 @@ const DEFAULT_GREETING_INSTRUCTIONS = {
 async function getSystemPrompt(promptLang, callContext = null, leadLanguage = null, leadData = null) {
   const customPrompts = await getPrompts();
   
+  // Carregar nome da empresa dinamicamente
+  const companyName = await getCompanyName();
+  
   let basePrompt;
   if (customPrompts?.systemPrompts?.[promptLang]) {
     basePrompt = customPrompts.systemPrompts[promptLang];
   } else {
     basePrompt = DEFAULT_SYSTEM_PROMPTS[promptLang] || DEFAULT_SYSTEM_PROMPTS.en;
   }
+  
+  // Substituir placeholder pelo nome real da empresa
+  basePrompt = basePrompt.replace(/\{COMPANY_NAME\}/g, companyName);
   
   // CRÍTICO: Criar checklist estruturado de dados
   basePrompt += `\n\n` + `=`.repeat(60);
@@ -514,6 +553,9 @@ async function getGreetingInstructions(promptLang, leadName, callContext = null,
   const name = leadName ? leadName.split(' ')[0] : '';
   const customPrompts = await getPrompts();
   
+  // Carregar nome da empresa dinamicamente
+  const companyName = await getCompanyName();
+  
   // Usar o idioma do LEAD para a saudação (não o do prompt)
   const greetingLang = leadLanguage || promptLang;
   
@@ -523,6 +565,9 @@ async function getGreetingInstructions(promptLang, leadName, callContext = null,
   } else {
     baseGreeting = DEFAULT_GREETING_INSTRUCTIONS[greetingLang] || DEFAULT_GREETING_INSTRUCTIONS.en;
   }
+  
+  // Substituir placeholder pelo nome real da empresa
+  baseGreeting = baseGreeting.replace(/\{COMPANY_NAME\}/g, companyName);
   
   // Substituir nome
   if (name) {
@@ -1142,6 +1187,73 @@ fastify.delete('/api/prompts', async (request, reply) => {
 });
 
 // ============================================================================
+// API - SETTINGS (Configurações da Empresa)
+// ============================================================================
+
+// Cache de settings
+let settingsCache = null;
+let settingsCacheTime = 0;
+const SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+// Obter settings
+fastify.get('/api/settings', async (request, reply) => {
+  if (!db) {
+    return reply.status(503).send({ error: 'Firebase not configured' });
+  }
+  
+  try {
+    // Verificar cache
+    if (settingsCache && (Date.now() - settingsCacheTime) < SETTINGS_CACHE_TTL) {
+      return settingsCache;
+    }
+    
+    const doc = await db.collection('settings').doc('company').get();
+    if (doc.exists) {
+      settingsCache = doc.data();
+      settingsCacheTime = Date.now();
+      console.log('📋 Settings carregados:', settingsCache);
+      return settingsCache;
+    }
+    
+    // Retornar default se não existir
+    return { companyName: COMPANY_NAME };
+  } catch (error) {
+    console.error('❌ Erro ao carregar settings:', error.message);
+    return reply.status(500).send({ error: error.message });
+  }
+});
+
+// Salvar settings
+fastify.put('/api/settings', async (request, reply) => {
+  if (!db) {
+    return reply.status(503).send({ error: 'Firebase not configured' });
+  }
+  
+  try {
+    const { companyName } = request.body;
+    
+    if (!companyName || !companyName.trim()) {
+      return reply.status(400).send({ error: 'Company name is required' });
+    }
+    
+    await db.collection('settings').doc('company').set({
+      companyName: companyName.trim(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    
+    // Invalidar cache
+    settingsCache = null;
+    settingsCacheTime = 0;
+    
+    console.log('✅ Settings salvos:', { companyName });
+    return { success: true, companyName: companyName.trim() };
+  } catch (error) {
+    console.error('❌ Erro ao salvar settings:', error.message);
+    return reply.status(500).send({ error: error.message });
+  }
+});
+
+// ============================================================================
 // SERVIDOR HTTP + WEBSOCKET
 // ============================================================================
 
@@ -1521,6 +1633,7 @@ const startServer = async () => {
 ║  📜 promptLang = idioma do SCRIPT (instruções da IA)                 ║
 ║  🗣️ leadLanguage = idioma da CONVERSA (voz da IA)                    ║
 ║  📋 Dados do lead são carregados do Firebase automaticamente         ║
+║  🏢 Nome da empresa é carregado dinamicamente                        ║
 ║                                                                      ║
 ║  📞 CHAMADAS:                                                        ║
 ║     POST /api/call        - Chamada única (busca dados do lead)      ║
@@ -1541,6 +1654,10 @@ const startServer = async () => {
 ║     PUT    /api/prompts/system/:lang - Atualizar system prompt       ║
 ║     PUT    /api/prompts/greeting/:lang - Atualizar saudação          ║
 ║     DELETE /api/prompts              - Reset prompts                 ║
+║                                                                      ║
+║  ⚙️ SETTINGS:                                                        ║
+║     GET    /api/settings        - Obter configurações                ║
+║     PUT    /api/settings        - Salvar nome da empresa             ║
 ╚══════════════════════════════════════════════════════════════════════╝
     `);
     });
