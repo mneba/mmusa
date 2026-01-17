@@ -1,27 +1,27 @@
 /**
  * Pool Leads AI Agent - WebSocket Server v14
  * 
- * v14: CORREÇÃO IDIOMAS + DADOS DO LEAD + SETTINGS
+ * v14: CORREÃ‡ÃƒO IDIOMAS + DADOS DO LEAD + SETTINGS
  *      - promptLang (lang): define qual SCRIPT/PROMPT a IA usa
  *      - leadLanguage: define qual IDIOMA a IA FALA na conversa
- *      - Voz OpenAI agora usa leadLanguage, não promptLang
- *      - Dados do lead (nome, email, endereço) são enviados para a IA
- *      - IA não pergunta idioma (já definido no cadastro)
+ *      - Voz OpenAI agora usa leadLanguage, nÃ£o promptLang
+ *      - Dados do lead (nome, email, endereÃ§o) sÃ£o enviados para a IA
+ *      - IA nÃ£o pergunta idioma (jÃ¡ definido no cadastro)
  *      - IA usa apenas dados reais, nunca inventa
  *      - Checklist estruturado: CONFIRMAR ou COLETAR dados
  *      - Nome da empresa carregado dinamicamente do Firebase
- *      - Endpoints GET/PUT /api/settings para configurações
+ *      - Endpoints GET/PUT /api/settings para configuraÃ§Ãµes
  * 
  * v13: Backend salva TODOS os campos do frontend
  *      - status, language, street, city, state, zipCode
  *      - objectiveId, objectiveName, nextStep, aiSummary
  * 
- * v12: Contexto específico por chamada (callContext)
- *      Chamadas em série (batch calling)
+ * v12: Contexto especÃ­fico por chamada (callContext)
+ *      Chamadas em sÃ©rie (batch calling)
  *      Fila de chamadas com status em tempo real
  * 
- * Firebase Firestore para transcrições e dados
- * Personalização com nome do lead
+ * Firebase Firestore para transcriÃ§Ãµes e dados
+ * PersonalizaÃ§Ã£o com nome do lead
  */
 
 import Fastify from 'fastify';
@@ -57,9 +57,9 @@ const VOICES = {
   pt: 'coral'
 };
 
-// Validação
+// ValidaÃ§Ã£o
 if (!OPENAI_API_KEY) {
-  console.error('❌ OPENAI_API_KEY não configurada!');
+  console.error('âŒ OPENAI_API_KEY nÃ£o configurada!');
   process.exit(1);
 }
 
@@ -67,9 +67,9 @@ if (!OPENAI_API_KEY) {
 let twilioClient = null;
 if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
   twilioClient = new Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-  console.log('✅ Twilio Client inicializado');
+  console.log('âœ… Twilio Client inicializado');
 } else {
-  console.log('⚠️ Twilio não configurado (TWILIO_ACCOUNT_SID ou TWILIO_AUTH_TOKEN não definidos)');
+  console.log('âš ï¸ Twilio nÃ£o configurado (TWILIO_ACCOUNT_SID ou TWILIO_AUTH_TOKEN nÃ£o definidos)');
 }
 
 // ============================================================================
@@ -85,39 +85,39 @@ try {
       credential: cert(credentials)
     });
     db = getFirestore();
-    console.log('✅ Firebase conectado!');
+    console.log('âœ… Firebase conectado!');
   } else {
-    console.log('⚠️ Firebase não configurado (FIREBASE_CREDENTIALS não definido)');
+    console.log('âš ï¸ Firebase nÃ£o configurado (FIREBASE_CREDENTIALS nÃ£o definido)');
   }
 } catch (error) {
-  console.error('❌ Erro ao conectar Firebase:', error.message);
+  console.error('âŒ Erro ao conectar Firebase:', error.message);
 }
 
 // ============================================================================
-// CALL QUEUE (Fila de Chamadas em Série)
+// CALL QUEUE (Fila de Chamadas em SÃ©rie)
 // ============================================================================
 
 const callQueue = {
   queue: [],           // Array de chamadas pendentes
   current: null,       // Chamada atual
-  isProcessing: false, // Se está processando a fila
+  isProcessing: false, // Se estÃ¡ processando a fila
   batchId: null,       // ID do lote atual
   results: []          // Resultados das chamadas
 };
 
-// Adicionar chamadas à fila
+// Adicionar chamadas Ã  fila
 function addToQueue(calls, batchId) {
   callQueue.queue.push(...calls.map(c => ({ ...c, batchId })));
   callQueue.batchId = batchId;
-  console.log(`📋 ${calls.length} chamadas adicionadas à fila. Total: ${callQueue.queue.length}`);
+  console.log(`ðŸ“‹ ${calls.length} chamadas adicionadas Ã  fila. Total: ${callQueue.queue.length}`);
 }
 
-// Processar próxima chamada
+// Processar prÃ³xima chamada
 async function processNextCall(serverHost) {
   if (callQueue.queue.length === 0) {
     callQueue.isProcessing = false;
     callQueue.current = null;
-    console.log('✅ Fila de chamadas concluída!');
+    console.log('âœ… Fila de chamadas concluÃ­da!');
     
     // Atualizar batch no Firebase
     if (db && callQueue.batchId) {
@@ -135,8 +135,8 @@ async function processNextCall(serverHost) {
   
   const { leadId, leadName, phone, lang, leadLanguage, callContext } = callQueue.current;
   
-  console.log(`📞 Iniciando chamada para: ${leadName} (${phone})`);
-  console.log(`   📜 Prompt: ${lang?.toUpperCase() || 'EN'}, 🗣️ Conversa: ${leadLanguage?.toUpperCase() || lang?.toUpperCase() || 'EN'}`);
+  console.log(`ðŸ“ž Iniciando chamada para: ${leadName} (${phone})`);
+  console.log(`   ðŸ“œ Prompt: ${lang?.toUpperCase() || 'EN'}, ðŸ—£ï¸ Conversa: ${leadLanguage?.toUpperCase() || lang?.toUpperCase() || 'EN'}`);
   
   try {
     // Fazer chamada via Twilio
@@ -154,7 +154,7 @@ async function processNextCall(serverHost) {
     console.log(`   CallSid: ${call.sid}`);
     
   } catch (error) {
-    console.error(`❌ Erro ao fazer chamada para ${phone}:`, error.message);
+    console.error(`âŒ Erro ao fazer chamada para ${phone}:`, error.message);
     callQueue.results.push({
       leadId,
       leadName,
@@ -163,7 +163,7 @@ async function processNextCall(serverHost) {
       error: error.message
     });
     
-    // Continuar para próxima chamada após falha
+    // Continuar para prÃ³xima chamada apÃ³s falha
     setTimeout(() => processNextCall(serverHost), 1000);
   }
 }
@@ -182,7 +182,7 @@ let companyNameCache = null;
 let companyNameCacheTime = 0;
 const COMPANY_NAME_CACHE_TTL = 5 * 60 * 1000;
 
-// Carregar nome da empresa (dinâmico)
+// Carregar nome da empresa (dinÃ¢mico)
 async function getCompanyName() {
   // Verificar cache
   if (companyNameCache && (Date.now() - companyNameCacheTime) < COMPANY_NAME_CACHE_TTL) {
@@ -196,12 +196,12 @@ async function getCompanyName() {
     if (doc.exists && doc.data().companyName) {
       companyNameCache = doc.data().companyName;
       companyNameCacheTime = Date.now();
-      console.log('🏢 Nome da empresa carregado:', companyNameCache);
+      console.log('ðŸ¢ Nome da empresa carregado:', companyNameCache);
       return companyNameCache;
     }
     return COMPANY_NAME; // Fallback
   } catch (error) {
-    console.error('❌ Erro ao carregar nome da empresa:', error.message);
+    console.error('âŒ Erro ao carregar nome da empresa:', error.message);
     return COMPANY_NAME; // Fallback
   }
 }
@@ -223,7 +223,7 @@ async function getPrompts() {
     }
     return null;
   } catch (error) {
-    console.error('❌ Erro ao carregar prompts:', error.message);
+    console.error('âŒ Erro ao carregar prompts:', error.message);
     return null;
   }
 }
@@ -241,7 +241,7 @@ async function savePrompts(prompts) {
     promptsCacheTime = 0;
     return true;
   } catch (error) {
-    console.error('❌ Erro ao salvar prompts:', error.message);
+    console.error('âŒ Erro ao salvar prompts:', error.message);
     return false;
   }
 }
@@ -260,7 +260,7 @@ async function getLeadByPhone(phone) {
     const doc = snapshot.docs[0];
     return { id: doc.id, ...doc.data() };
   } catch (error) {
-    console.error('❌ Erro ao buscar lead:', error.message);
+    console.error('âŒ Erro ao buscar lead:', error.message);
     return null;
   }
 }
@@ -274,7 +274,7 @@ async function getLeadById(leadId) {
     if (!doc.exists) return null;
     return { id: doc.id, ...doc.data() };
   } catch (error) {
-    console.error('❌ Erro ao buscar lead:', error.message);
+    console.error('âŒ Erro ao buscar lead:', error.message);
     return null;
   }
 }
@@ -293,12 +293,12 @@ async function createCallRecord(leadId, callData) {
       });
     return callRef.id;
   } catch (error) {
-    console.error('❌ Erro ao criar registro de chamada:', error.message);
+    console.error('âŒ Erro ao criar registro de chamada:', error.message);
     return null;
   }
 }
 
-// Adicionar à transcrição
+// Adicionar Ã  transcriÃ§Ã£o
 async function addToTranscript(leadId, callId, role, text) {
   if (!db || !leadId || !callId) return;
   
@@ -313,7 +313,7 @@ async function addToTranscript(leadId, callId, role, text) {
         })
       });
   } catch (error) {
-    console.error('❌ Erro ao salvar transcrição:', error.message);
+    console.error('âŒ Erro ao salvar transcriÃ§Ã£o:', error.message);
   }
 }
 
@@ -338,15 +338,15 @@ async function finalizeCall(leadId, callId, duration, summary, intent) {
       totalCalls: FieldValue.increment(1)
     });
     
-    console.log(`💾 Chamada finalizada: ${callId} - Intenção: ${intent}`);
+    console.log(`ðŸ’¾ Chamada finalizada: ${callId} - IntenÃ§Ã£o: ${intent}`);
   } catch (error) {
-    console.error('❌ Erro ao finalizar chamada:', error.message);
+    console.error('âŒ Erro ao finalizar chamada:', error.message);
   }
 }
 
 // ============================================================================
-// PROMPTS PADRÃO
-// Usar {COMPANY_NAME} como placeholder - será substituído dinamicamente
+// PROMPTS PADRÃƒO
+// Usar {COMPANY_NAME} como placeholder - serÃ¡ substituÃ­do dinamicamente
 // ============================================================================
 
 const DEFAULT_SYSTEM_PROMPTS = {
@@ -372,61 +372,61 @@ You are calling people who have shown interest in pool installation. Your goal i
 - Be warm but professional
 - Listen more than you talk`,
 
-  es: `Eres un asistente de IA amigable y profesional de {COMPANY_NAME}, una empresa de instalación de piscinas residenciales en Estados Unidos.
+  es: `Eres un asistente de IA amigable y profesional de {COMPANY_NAME}, una empresa de instalaciÃ³n de piscinas residenciales en Estados Unidos.
 
 ## TU ROL
-Estás llamando a personas que han mostrado interés en instalar una piscina. Tu objetivo es calificar leads y agendar visitas técnicas.
+EstÃ¡s llamando a personas que han mostrado interÃ©s en instalar una piscina. Tu objetivo es calificar leads y agendar visitas tÃ©cnicas.
 
 ## CUMPLIMIENTO
-1. Si alguien pide ser removido: "Entiendo completamente. Estoy removiendo su número ahora mismo. No recibirá más llamadas. Que tenga un excelente día."
-2. Si quieren hablar con un humano: "¡Por supuesto! Lo transfiero a un consultor ahora mismo."
-3. Respeta el tiempo de las personas - ofrece llamar después si están ocupados.
+1. Si alguien pide ser removido: "Entiendo completamente. Estoy removiendo su nÃºmero ahora mismo. No recibirÃ¡ mÃ¡s llamadas. Que tenga un excelente dÃ­a."
+2. Si quieren hablar con un humano: "Â¡Por supuesto! Lo transfiero a un consultor ahora mismo."
+3. Respeta el tiempo de las personas - ofrece llamar despuÃ©s si estÃ¡n ocupados.
 
-## FLUJO DE CONVERSACIÓN
-1. Confirmar interés en instalación de piscina
-2. Hacer UNA pregunta a la vez: tipo de piscina, tamaño del patio, plazo, presupuesto
+## FLUJO DE CONVERSACIÃ“N
+1. Confirmar interÃ©s en instalaciÃ³n de piscina
+2. Hacer UNA pregunta a la vez: tipo de piscina, tamaÃ±o del patio, plazo, presupuesto
 3. Agendar una visita de consulta gratuita
-4. Cerrar cálidamente
+4. Cerrar cÃ¡lidamente
 
 ## ESTILO
 - Habla naturalmente, usa contracciones
-- Mantén respuestas cortas (1-2 oraciones máximo)
-- Sé cálido pero profesional
-- Escucha más de lo que hablas`,
+- MantÃ©n respuestas cortas (1-2 oraciones mÃ¡ximo)
+- SÃ© cÃ¡lido pero profesional
+- Escucha mÃ¡s de lo que hablas`,
 
-  pt: `Você é um assistente de IA amigável e profissional da {COMPANY_NAME}, uma empresa de instalação de piscinas residenciais nos Estados Unidos.
+  pt: `VocÃª Ã© um assistente de IA amigÃ¡vel e profissional da {COMPANY_NAME}, uma empresa de instalaÃ§Ã£o de piscinas residenciais nos Estados Unidos.
 
 ## SEU PAPEL
-Você está ligando para pessoas que demonstraram interesse em instalar uma piscina. Seu objetivo é qualificar leads e agendar visitas técnicas.
+VocÃª estÃ¡ ligando para pessoas que demonstraram interesse em instalar uma piscina. Seu objetivo Ã© qualificar leads e agendar visitas tÃ©cnicas.
 
 ## CONFORMIDADE
-1. Se alguém pedir para ser removido: "Entendo completamente. Estou removendo seu número agora mesmo. Você não receberá mais ligações. Tenha um ótimo dia."
-2. Se quiserem falar com um humano: "Claro! Vou transferir você para um consultor agora mesmo."
-3. Respeite o tempo das pessoas - ofereça ligar depois se estiverem ocupadas.
+1. Se alguÃ©m pedir para ser removido: "Entendo completamente. Estou removendo seu nÃºmero agora mesmo. VocÃª nÃ£o receberÃ¡ mais ligaÃ§Ãµes. Tenha um Ã³timo dia."
+2. Se quiserem falar com um humano: "Claro! Vou transferir vocÃª para um consultor agora mesmo."
+3. Respeite o tempo das pessoas - ofereÃ§a ligar depois se estiverem ocupadas.
 
 ## FLUXO DA CONVERSA
-1. Confirmar interesse em instalação de piscina
-2. Fazer UMA pergunta de cada vez: tipo de piscina, tamanho do quintal, prazo, orçamento
+1. Confirmar interesse em instalaÃ§Ã£o de piscina
+2. Fazer UMA pergunta de cada vez: tipo de piscina, tamanho do quintal, prazo, orÃ§amento
 3. Agendar uma visita de consulta gratuita
 4. Encerrar de forma calorosa
 
 ## ESTILO
-- Fale naturalmente, use contrações
-- Mantenha respostas curtas (1-2 frases no máximo)
+- Fale naturalmente, use contraÃ§Ãµes
+- Mantenha respostas curtas (1-2 frases no mÃ¡ximo)
 - Seja caloroso mas profissional
-- Ouça mais do que fala`
+- OuÃ§a mais do que fala`
 };
 
 const DEFAULT_GREETING_INSTRUCTIONS = {
   en: `Start the call naturally. Say "Hi!" warmly. Introduce yourself as calling from {COMPANY_NAME} about their pool installation interest. Mention briefly that the call may be recorded. Then ask if they have a moment to chat. Keep it warm and conversational.`,
-  es: `Comienza la llamada de forma natural. Saluda diciendo "¡Hola!" con calidez. Preséntate como llamando de {COMPANY_NAME} sobre su interés en piscinas. Menciona brevemente que la llamada puede ser grabada. Luego pregunta si tienen un momento para hablar.`,
-  pt: `Comece a ligação de forma natural. Diga "Oi!" de forma calorosa. Se apresente como ligando da {COMPANY_NAME} sobre o interesse em piscina. Mencione brevemente que a ligação pode ser gravada. Depois pergunte se a pessoa tem um momento para conversar.`
+  es: `Comienza la llamada de forma natural. Saluda diciendo "Â¡Hola!" con calidez. PresÃ©ntate como llamando de {COMPANY_NAME} sobre su interÃ©s en piscinas. Menciona brevemente que la llamada puede ser grabada. Luego pregunta si tienen un momento para hablar.`,
+  pt: `Comece a ligaÃ§Ã£o de forma natural. Diga "Oi!" de forma calorosa. Se apresente como ligando da {COMPANY_NAME} sobre o interesse em piscina. Mencione brevemente que a ligaÃ§Ã£o pode ser gravada. Depois pergunte se a pessoa tem um momento para conversar.`
 };
 
-// Obter prompt do sistema (com contexto específico se fornecido)
-// promptLang = idioma do SCRIPT (instruções)
+// Obter prompt do sistema (com contexto especÃ­fico se fornecido)
+// promptLang = idioma do SCRIPT (instruÃ§Ãµes)
 // leadLanguage = idioma que a IA deve FALAR
-// leadData = dados cadastrados do lead (nome, email, endereço, etc)
+// leadData = dados cadastrados do lead (nome, email, endereÃ§o, etc)
 async function getSystemPrompt(promptLang, callContext = null, leadLanguage = null, leadData = null) {
   const customPrompts = await getPrompts();
   
@@ -443,15 +443,15 @@ async function getSystemPrompt(promptLang, callContext = null, leadLanguage = nu
   // Substituir placeholder pelo nome real da empresa
   basePrompt = basePrompt.replace(/\{COMPANY_NAME\}/g, companyName);
   
-  // CRÍTICO: Criar checklist estruturado de dados
+  // CRÃTICO: Criar checklist estruturado de dados
   basePrompt += `\n\n` + `=`.repeat(60);
-  basePrompt += `\n## 📋 CHECKLIST DE DADOS - SIGA NA ORDEM`;
+  basePrompt += `\n## ðŸ“‹ CHECKLIST DE DADOS - SIGA NA ORDEM`;
   basePrompt += `\n` + `=`.repeat(60);
-  basePrompt += `\n⚠️ REGRAS ABSOLUTAS:`;
-  basePrompt += `\n1. NUNCA invente dados - use APENAS o que está listado abaixo`;
+  basePrompt += `\nâš ï¸ REGRAS ABSOLUTAS:`;
+  basePrompt += `\n1. NUNCA invente dados - use APENAS o que estÃ¡ listado abaixo`;
   basePrompt += `\n2. Siga o checklist NA ORDEM`;
-  basePrompt += `\n3. Faça UMA pergunta por vez e AGUARDE resposta`;
-  basePrompt += `\n4. Marque mentalmente cada item como ✅ completo antes de avançar`;
+  basePrompt += `\n3. FaÃ§a UMA pergunta por vez e AGUARDE resposta`;
+  basePrompt += `\n4. Marque mentalmente cada item como âœ… completo antes de avanÃ§ar`;
   
   // Determinar status de cada campo
   const temNome = leadData?.name && leadData.name.trim();
@@ -461,94 +461,94 @@ async function getSystemPrompt(promptLang, callContext = null, leadLanguage = nu
   basePrompt += `\n\n### CHECKLIST (siga esta ordem exata):`;
   
   // 1. NOME
-  basePrompt += `\n\n**1️⃣ NOME COMPLETO**`;
+  basePrompt += `\n\n**1ï¸âƒ£ NOME COMPLETO**`;
   if (temNome) {
-    basePrompt += `\n   📌 Status: CADASTRADO = "${leadData.name}"`;
-    basePrompt += `\n   ✅ Ação: CONFIRMAR → "I have your name as ${leadData.name}, is that correct?"`;
-    basePrompt += `\n   Se incorreto: peça o nome correto`;
+    basePrompt += `\n   ðŸ“Œ Status: CADASTRADO = "${leadData.name}"`;
+    basePrompt += `\n   âœ… AÃ§Ã£o: CONFIRMAR â†’ "I have your name as ${leadData.name}, is that correct?"`;
+    basePrompt += `\n   Se incorreto: peÃ§a o nome correto`;
   } else {
-    basePrompt += `\n   📌 Status: ❌ NÃO CADASTRADO`;
-    basePrompt += `\n   🔴 Ação: PERGUNTAR (OBRIGATÓRIO) → "Could I get your full name please?"`;
-    basePrompt += `\n   ⚠️ NÃO PULE - você DEVE coletar o nome`;
+    basePrompt += `\n   ðŸ“Œ Status: âŒ NÃƒO CADASTRADO`;
+    basePrompt += `\n   ðŸ”´ AÃ§Ã£o: PERGUNTAR (OBRIGATÃ“RIO) â†’ "Could I get your full name please?"`;
+    basePrompt += `\n   âš ï¸ NÃƒO PULE - vocÃª DEVE coletar o nome`;
   }
   
   // 2. EMAIL
-  basePrompt += `\n\n**2️⃣ EMAIL**`;
+  basePrompt += `\n\n**2ï¸âƒ£ EMAIL**`;
   if (temEmail) {
-    basePrompt += `\n   📌 Status: CADASTRADO = "${leadData.email}"`;
-    basePrompt += `\n   ✅ Ação: CONFIRMAR → "And your email is ${leadData.email}, correct?"`;
-    basePrompt += `\n   Se incorreto: peça o email correto`;
+    basePrompt += `\n   ðŸ“Œ Status: CADASTRADO = "${leadData.email}"`;
+    basePrompt += `\n   âœ… AÃ§Ã£o: CONFIRMAR â†’ "And your email is ${leadData.email}, correct?"`;
+    basePrompt += `\n   Se incorreto: peÃ§a o email correto`;
   } else {
-    basePrompt += `\n   📌 Status: ❌ NÃO CADASTRADO`;
-    basePrompt += `\n   🔴 Ação: PERGUNTAR (OBRIGATÓRIO) → "What's the best email address to reach you?"`;
-    basePrompt += `\n   ⚠️ NÃO PULE - você DEVE coletar o email`;
+    basePrompt += `\n   ðŸ“Œ Status: âŒ NÃƒO CADASTRADO`;
+    basePrompt += `\n   ðŸ”´ AÃ§Ã£o: PERGUNTAR (OBRIGATÃ“RIO) â†’ "What's the best email address to reach you?"`;
+    basePrompt += `\n   âš ï¸ NÃƒO PULE - vocÃª DEVE coletar o email`;
   }
   
-  // 3. ENDEREÇO
-  basePrompt += `\n\n**3️⃣ ENDEREÇO DA PROPRIEDADE**`;
+  // 3. ENDEREÃ‡O
+  basePrompt += `\n\n**3ï¸âƒ£ ENDEREÃ‡O DA PROPRIEDADE**`;
   if (temEndereco) {
     const endereco = [leadData.street, leadData.city, leadData.state, leadData.zipCode].filter(Boolean).join(', ');
-    basePrompt += `\n   📌 Status: CADASTRADO = "${endereco}"`;
-    basePrompt += `\n   ✅ Ação: CONFIRMAR → "I have your property address as ${endereco}, is that correct?"`;
-    basePrompt += `\n   Se incorreto: peça o endereço correto`;
+    basePrompt += `\n   ðŸ“Œ Status: CADASTRADO = "${endereco}"`;
+    basePrompt += `\n   âœ… AÃ§Ã£o: CONFIRMAR â†’ "I have your property address as ${endereco}, is that correct?"`;
+    basePrompt += `\n   Se incorreto: peÃ§a o endereÃ§o correto`;
   } else {
-    basePrompt += `\n   📌 Status: ❌ NÃO CADASTRADO`;
-    basePrompt += `\n   🔴 Ação: PERGUNTAR (OBRIGATÓRIO) → "What is the property address where you're considering the pool?"`;
-    basePrompt += `\n   ⚠️ NÃO PULE - você DEVE coletar o endereço`;
+    basePrompt += `\n   ðŸ“Œ Status: âŒ NÃƒO CADASTRADO`;
+    basePrompt += `\n   ðŸ”´ AÃ§Ã£o: PERGUNTAR (OBRIGATÃ“RIO) â†’ "What is the property address where you're considering the pool?"`;
+    basePrompt += `\n   âš ï¸ NÃƒO PULE - vocÃª DEVE coletar o endereÃ§o`;
   }
   
   // Telefone (informativo)
   if (leadData?.phone) {
-    basePrompt += `\n\n**📞 TELEFONE** (apenas referência)`;
-    basePrompt += `\n   Este é o número da ligação atual: ${leadData.phone}`;
+    basePrompt += `\n\n**ðŸ“ž TELEFONE** (apenas referÃªncia)`;
+    basePrompt += `\n   Este Ã© o nÃºmero da ligaÃ§Ã£o atual: ${leadData.phone}`;
   }
   
   // Resumo visual
   const pendentes = [];
   if (!temNome) pendentes.push('Nome');
   if (!temEmail) pendentes.push('Email');
-  if (!temEndereco) pendentes.push('Endereço');
+  if (!temEndereco) pendentes.push('EndereÃ§o');
   
   if (pendentes.length > 0) {
-    basePrompt += `\n\n` + `⚠️`.repeat(3) + ` ATENÇÃO ` + `⚠️`.repeat(3);
-    basePrompt += `\n🔴 DADOS QUE VOCÊ DEVE COLETAR: ${pendentes.join(', ')}`;
-    basePrompt += `\nNÃO encerre a ligação sem coletar TODOS estes dados!`;
+    basePrompt += `\n\n` + `âš ï¸`.repeat(3) + ` ATENÃ‡ÃƒO ` + `âš ï¸`.repeat(3);
+    basePrompt += `\nðŸ”´ DADOS QUE VOCÃŠ DEVE COLETAR: ${pendentes.join(', ')}`;
+    basePrompt += `\nNÃƒO encerre a ligaÃ§Ã£o sem coletar TODOS estes dados!`;
   }
   
   basePrompt += `\n` + `=`.repeat(60);
   
   // Notas adicionais se existirem
   if (leadData?.notes && leadData.notes.trim()) {
-    basePrompt += `\n\n### 📝 NOTAS SOBRE O CLIENTE:\n${leadData.notes}`;
+    basePrompt += `\n\n### ðŸ“ NOTAS SOBRE O CLIENTE:\n${leadData.notes}`;
   }
   
-  // Histórico se existir
+  // HistÃ³rico se existir
   if (leadData?.aiSummary && leadData.aiSummary.trim()) {
-    basePrompt += `\n\n### 📜 HISTÓRICO DE CONTATOS ANTERIORES:\n${leadData.aiSummary}`;
+    basePrompt += `\n\n### ðŸ“œ HISTÃ“RICO DE CONTATOS ANTERIORES:\n${leadData.aiSummary}`;
   }
   
-  // Se há contexto específico, adicionar ao prompt
+  // Se hÃ¡ contexto especÃ­fico, adicionar ao prompt
   if (callContext && callContext.trim()) {
-    basePrompt += `\n\n## 🎯 OBJETIVO ESPECÍFICO DESTA LIGAÇÃO\n${callContext}`;
+    basePrompt += `\n\n## ðŸŽ¯ OBJETIVO ESPECÃFICO DESTA LIGAÃ‡ÃƒO\n${callContext}`;
   }
   
-  // CRÍTICO: Se o idioma do lead é diferente do prompt, instruir a IA a falar no idioma correto
+  // CRÃTICO: Se o idioma do lead Ã© diferente do prompt, instruir a IA a falar no idioma correto
   if (leadLanguage && leadLanguage !== promptLang) {
     const languageNames = { en: 'English', es: 'Spanish', pt: 'Portuguese' };
     const targetLang = languageNames[leadLanguage] || 'English';
-    basePrompt += `\n\n## 🗣️ IDIOMA DA CONVERSA\nIMPORTANTE: O cliente fala ${targetLang}. Você DEVE conduzir toda a conversa em ${targetLang}, independente do idioma destas instruções.`;
+    basePrompt += `\n\n## ðŸ—£ï¸ IDIOMA DA CONVERSA\nIMPORTANTE: O cliente fala ${targetLang}. VocÃª DEVE conduzir toda a conversa em ${targetLang}, independente do idioma destas instruÃ§Ãµes.`;
   }
   
-  // Adicionar instrução sobre idioma já definido
+  // Adicionar instruÃ§Ã£o sobre idioma jÃ¡ definido
   const languageNames = { en: 'English', es: 'Spanish', pt: 'Portuguese' };
   const conversationLang = languageNames[leadLanguage || promptLang] || 'English';
-  basePrompt += `\n\n## 🚫 IDIOMA JÁ DEFINIDO\nO idioma é ${conversationLang}. NÃO pergunte "do you prefer English or Spanish" - conduza toda a conversa em ${conversationLang}.`;
+  basePrompt += `\n\n## ðŸš« IDIOMA JÃ DEFINIDO\nO idioma Ã© ${conversationLang}. NÃƒO pergunte "do you prefer English or Spanish" - conduza toda a conversa em ${conversationLang}.`;
   
   return basePrompt;
 }
 
-// Obter instruções de saudação
-// leadLanguage é usado para a saudação (idioma que a IA fala)
+// Obter instruÃ§Ãµes de saudaÃ§Ã£o
+// leadLanguage Ã© usado para a saudaÃ§Ã£o (idioma que a IA fala)
 async function getGreetingInstructions(promptLang, leadName, callContext = null, leadLanguage = null) {
   const name = leadName ? leadName.split(' ')[0] : '';
   const customPrompts = await getPrompts();
@@ -556,7 +556,7 @@ async function getGreetingInstructions(promptLang, leadName, callContext = null,
   // Carregar nome da empresa dinamicamente
   const companyName = await getCompanyName();
   
-  // Usar o idioma do LEAD para a saudação (não o do prompt)
+  // Usar o idioma do LEAD para a saudaÃ§Ã£o (nÃ£o o do prompt)
   const greetingLang = leadLanguage || promptLang;
   
   let baseGreeting;
@@ -573,16 +573,16 @@ async function getGreetingInstructions(promptLang, leadName, callContext = null,
   if (name) {
     baseGreeting = baseGreeting.replace(/\{name\}/g, name);
     baseGreeting = baseGreeting.replace(/"Hi!"/g, `"Hi ${name}!"`);
-    baseGreeting = baseGreeting.replace(/"¡Hola!"/g, `"¡Hola ${name}!"`);
+    baseGreeting = baseGreeting.replace(/"Â¡Hola!"/g, `"Â¡Hola ${name}!"`);
     baseGreeting = baseGreeting.replace(/"Oi!"/g, `"Oi ${name}!"`);
   }
   
-  // Adicionar contexto específico à saudação se houver
+  // Adicionar contexto especÃ­fico Ã  saudaÃ§Ã£o se houver
   if (callContext && callContext.trim()) {
     baseGreeting += ` Remember the specific goal: ${callContext}`;
   }
   
-  // Reforçar idioma da conversa
+  // ReforÃ§ar idioma da conversa
   if (leadLanguage && leadLanguage !== promptLang) {
     const languageNames = { en: 'English', es: 'Spanish', pt: 'Portuguese' };
     baseGreeting += ` IMPORTANT: Speak in ${languageNames[leadLanguage] || 'English'} throughout the entire conversation.`;
@@ -633,7 +633,7 @@ fastify.all('/incoming-call', async (request, reply) => {
   // lang = idioma do PROMPT (script)
   // leadLanguage = idioma que o LEAD fala (para a conversa)
   const lang = request.query?.lang || 'en';
-  const leadLanguage = request.query?.leadLanguage || lang; // Se não especificado, usa o mesmo do prompt
+  const leadLanguage = request.query?.leadLanguage || lang; // Se nÃ£o especificado, usa o mesmo do prompt
   const leadId = request.query?.leadId || null;
   const leadName = request.query?.leadName ? decodeURIComponent(request.query.leadName) : null;
   const callContext = request.query?.callContext ? decodeURIComponent(request.query.callContext) : null;
@@ -641,12 +641,12 @@ fastify.all('/incoming-call', async (request, reply) => {
   const validLang = ['en', 'es', 'pt'].includes(lang) ? lang : 'en';
   const validLeadLang = ['en', 'es', 'pt'].includes(leadLanguage) ? leadLanguage : validLang;
   
-  console.log(`📞 Nova chamada: ${callSid}`);
-  console.log(`   De: ${from} → Para: ${to}`);
-  console.log(`   📜 Idioma Prompt: ${validLang.toUpperCase()}`);
-  console.log(`   🗣️ Idioma Lead: ${validLeadLang.toUpperCase()}`);
-  if (leadName) console.log(`   👤 Lead: ${leadName}`);
-  if (callContext) console.log(`   🎯 Contexto: ${callContext.substring(0, 50)}...`);
+  console.log(`ðŸ“ž Nova chamada: ${callSid}`);
+  console.log(`   De: ${from} â†’ Para: ${to}`);
+  console.log(`   ðŸ“œ Idioma Prompt: ${validLang.toUpperCase()}`);
+  console.log(`   ðŸ—£ï¸ Idioma Lead: ${validLeadLang.toUpperCase()}`);
+  if (leadName) console.log(`   ðŸ‘¤ Lead: ${leadName}`);
+  if (callContext) console.log(`   ðŸŽ¯ Contexto: ${callContext.substring(0, 50)}...`);
 
   const host = request.headers.host;
   
@@ -669,21 +669,21 @@ fastify.all('/incoming-call', async (request, reply) => {
   reply.type('text/xml').send(twimlResponse);
 });
 
-// Callback de status (chamada única)
+// Callback de status (chamada Ãºnica)
 fastify.post('/call-status', async (request, reply) => {
   const { CallSid, CallStatus, CallDuration } = request.body;
-  console.log(`📊 Status: ${CallSid} - ${CallStatus} (${CallDuration || 0}s)`);
+  console.log(`ðŸ“Š Status: ${CallSid} - ${CallStatus} (${CallDuration || 0}s)`);
   reply.send({ received: true });
 });
 
-// Callback de status (chamadas em série)
+// Callback de status (chamadas em sÃ©rie)
 fastify.post('/call-status-batch', async (request, reply) => {
   const { CallSid, CallStatus, CallDuration } = request.body;
   const { batchId, leadId } = request.query;
   
-  console.log(`📊 Batch Status: ${CallSid} - ${CallStatus} (${CallDuration || 0}s)`);
+  console.log(`ðŸ“Š Batch Status: ${CallSid} - ${CallStatus} (${CallDuration || 0}s)`);
   
-  // Se chamada completou, processar próxima
+  // Se chamada completou, processar prÃ³xima
   if (CallStatus === 'completed' || CallStatus === 'failed' || CallStatus === 'busy' || CallStatus === 'no-answer') {
     // Salvar resultado
     callQueue.results.push({
@@ -729,7 +729,7 @@ fastify.post('/api/leads', async (request, reply) => {
       'nextStep', 'aiSummary'
     ];
     
-    // Filtrar apenas campos definidos (não undefined)
+    // Filtrar apenas campos definidos (nÃ£o undefined)
     const filterDefined = (obj, fields) => {
       const result = {};
       for (const field of fields) {
@@ -750,7 +750,7 @@ fastify.post('/api/leads', async (request, reply) => {
       };
       
       await db.collection('leads').doc(existing.id).update(updateData);
-      console.log(`✅ Lead atualizado (POST): ${existing.id}`, Object.keys(updateData));
+      console.log(`âœ… Lead atualizado (POST): ${existing.id}`, Object.keys(updateData));
       return { id: existing.id, updated: true };
     } else {
       // CREATE: novo lead com todos os campos
@@ -780,11 +780,11 @@ fastify.post('/api/leads', async (request, reply) => {
       };
       
       const docRef = await db.collection('leads').add(createData);
-      console.log(`✅ Lead criado: ${docRef.id}`, Object.keys(createData));
+      console.log(`âœ… Lead criado: ${docRef.id}`, Object.keys(createData));
       return { id: docRef.id, created: true };
     }
   } catch (error) {
-    console.error('❌ Erro ao criar lead:', error);
+    console.error('âŒ Erro ao criar lead:', error);
     return reply.status(500).send({ error: error.message });
   }
 });
@@ -818,11 +818,11 @@ fastify.put('/api/leads/:leadId', async (request, reply) => {
     }
     
     await db.collection('leads').doc(leadId).update(updateData);
-    console.log(`✅ Lead atualizado (PUT): ${leadId}`, Object.keys(updateData));
+    console.log(`âœ… Lead atualizado (PUT): ${leadId}`, Object.keys(updateData));
     
     return { id: leadId, updated: true };
   } catch (error) {
-    console.error('❌ Erro ao atualizar lead:', error);
+    console.error('âŒ Erro ao atualizar lead:', error);
     return reply.status(500).send({ error: error.message });
   }
 });
@@ -850,7 +850,7 @@ fastify.get('/api/leads', async (request, reply) => {
   }
 });
 
-// Buscar lead específico
+// Buscar lead especÃ­fico
 fastify.get('/api/leads/:leadId', async (request, reply) => {
   if (!db) {
     return reply.status(503).send({ error: 'Firebase not configured' });
@@ -914,7 +914,7 @@ fastify.get('/api/leads/:leadId/calls', async (request, reply) => {
 // API - CHAMADAS
 // ============================================================================
 
-// Fazer chamada única
+// Fazer chamada Ãºnica
 fastify.post('/api/call', async (request, reply) => {
   if (!twilioClient) {
     return reply.status(503).send({ error: 'Twilio not configured' });
@@ -948,12 +948,12 @@ fastify.post('/api/call', async (request, reply) => {
           notes: lead.notes || '',
           aiSummary: lead.aiSummary || ''
         };
-        console.log(`📋 Dados do lead carregados:`, JSON.stringify(leadData));
+        console.log(`ðŸ“‹ Dados do lead carregados:`, JSON.stringify(leadData));
       }
     }
     
-    console.log(`📞 Iniciando chamada: ${leadName || phone}`);
-    console.log(`   📜 Prompt: ${promptLang.toUpperCase()}, 🗣️ Conversa: ${conversationLang.toUpperCase()}`);
+    console.log(`ðŸ“ž Iniciando chamada: ${leadName || phone}`);
+    console.log(`   ðŸ“œ Prompt: ${promptLang.toUpperCase()}, ðŸ—£ï¸ Conversa: ${conversationLang.toUpperCase()}`);
     
     // Encode leadData como JSON para passar via URL
     const leadDataParam = leadData ? encodeURIComponent(JSON.stringify(leadData)) : '';
@@ -977,7 +977,7 @@ fastify.post('/api/call', async (request, reply) => {
   }
 });
 
-// Fazer chamadas em série (batch)
+// Fazer chamadas em sÃ©rie (batch)
 fastify.post('/api/call/batch', async (request, reply) => {
   if (!twilioClient) {
     return reply.status(503).send({ error: 'Twilio not configured' });
@@ -985,7 +985,7 @@ fastify.post('/api/call/batch', async (request, reply) => {
   
   if (callQueue.isProcessing) {
     return reply.status(409).send({ 
-      error: 'Já existe uma fila de chamadas em andamento',
+      error: 'JÃ¡ existe uma fila de chamadas em andamento',
       queue: {
         pending: callQueue.queue.length,
         current: callQueue.current?.leadName
@@ -1031,7 +1031,7 @@ fastify.post('/api/call/batch', async (request, reply) => {
     // Resetar resultados
     callQueue.results = [];
     
-    // Adicionar à fila
+    // Adicionar Ã  fila
     addToQueue(calls, batchId);
     
     // Iniciar processamento
@@ -1070,7 +1070,7 @@ fastify.get('/api/call/queue', async (request, reply) => {
 fastify.delete('/api/call/queue', async (request, reply) => {
   callQueue.queue = [];
   callQueue.isProcessing = false;
-  console.log('🛑 Fila de chamadas cancelada');
+  console.log('ðŸ›‘ Fila de chamadas cancelada');
   
   return { success: true, message: 'Fila cancelada' };
 });
@@ -1139,7 +1139,7 @@ fastify.put('/api/prompts/system/:lang', async (request, reply) => {
   }
 });
 
-// Atualizar saudação
+// Atualizar saudaÃ§Ã£o
 fastify.put('/api/prompts/greeting/:lang', async (request, reply) => {
   if (!db) {
     return reply.status(503).send({ error: 'Firebase not configured' });
@@ -1187,7 +1187,7 @@ fastify.delete('/api/prompts', async (request, reply) => {
 });
 
 // ============================================================================
-// API - SETTINGS (Configurações da Empresa)
+// API - SETTINGS (ConfiguraÃ§Ãµes da Empresa)
 // ============================================================================
 
 // Cache de settings
@@ -1211,14 +1211,14 @@ fastify.get('/api/settings', async (request, reply) => {
     if (doc.exists) {
       settingsCache = doc.data();
       settingsCacheTime = Date.now();
-      console.log('📋 Settings carregados:', settingsCache);
+      console.log('ðŸ“‹ Settings carregados:', settingsCache);
       return settingsCache;
     }
     
-    // Retornar default se não existir
+    // Retornar default se nÃ£o existir
     return { companyName: COMPANY_NAME };
   } catch (error) {
-    console.error('❌ Erro ao carregar settings:', error.message);
+    console.error('âŒ Erro ao carregar settings:', error.message);
     return reply.status(500).send({ error: error.message });
   }
 });
@@ -1245,10 +1245,380 @@ fastify.put('/api/settings', async (request, reply) => {
     settingsCache = null;
     settingsCacheTime = 0;
     
-    console.log('✅ Settings salvos:', { companyName });
+    console.log('âœ… Settings salvos:', { companyName });
     return { success: true, companyName: companyName.trim() };
   } catch (error) {
-    console.error('❌ Erro ao salvar settings:', error.message);
+    console.error('âŒ Erro ao salvar settings:', error.message);
+    return reply.status(500).send({ error: error.message });
+  }
+});
+
+// ============================================================================
+// API - SETUP (Onboarding e Criação de Prompts)
+// ============================================================================
+
+// Obter configuração completa do cliente
+fastify.get('/api/setup', async (request, reply) => {
+  if (!db) {
+    return reply.status(503).send({ error: 'Firebase not configured' });
+  }
+  
+  try {
+    const doc = await db.collection('settings').doc('setup').get();
+    
+    if (!doc.exists) {
+      return { 
+        isConfigured: false,
+        data: null 
+      };
+    }
+    
+    return {
+      isConfigured: true,
+      data: doc.data()
+    };
+  } catch (error) {
+    console.error('❌ Erro ao carregar setup:', error.message);
+    return reply.status(500).send({ error: error.message });
+  }
+});
+
+// Salvar configuração completa (onboarding ou novo prompt)
+fastify.post('/api/setup', async (request, reply) => {
+  if (!db) {
+    return reply.status(503).send({ error: 'Firebase not configured' });
+  }
+  
+  try {
+    const {
+      // Dados da empresa
+      companyName,
+      segment,
+      segmentCustom,
+      about,
+      products,
+      differentials,
+      team,
+      
+      // Dados do prompt
+      objective,
+      objectiveDetails,
+      tone,
+      assistantName,
+      objections,
+      
+      // Idiomas
+      languages,
+      defaultLanguage,
+      
+      // Prompt gerado
+      generatedPrompt,
+      promptName,
+      isDefault
+    } = request.body;
+    
+    // Validações básicas
+    if (!companyName || !companyName.trim()) {
+      return reply.status(400).send({ error: 'Company name is required' });
+    }
+    
+    // Gerar ID único para o prompt
+    const promptId = `prompt_${Date.now()}`;
+    
+    // Criar objeto do prompt
+    const promptData = {
+      id: promptId,
+      name: promptName || 'First Contact',
+      content: generatedPrompt,
+      objective: objective,
+      objectiveDetails: objectiveDetails,
+      tone: tone || 'friendly',
+      assistantName: assistantName || 'Julia',
+      objections: objections || [],
+      isDefault: isDefault !== false,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    };
+    
+    // Buscar setup existente
+    const existingDoc = await db.collection('settings').doc('setup').get();
+    const existingData = existingDoc.exists ? existingDoc.data() : null;
+    
+    // Verificar limite de 3 prompts
+    const existingPrompts = existingData?.prompts || [];
+    if (existingPrompts.length >= 3 && !existingPrompts.find(p => p.id === promptId)) {
+      return reply.status(400).send({ 
+        error: 'Maximum of 3 prompts allowed. Please delete one before creating a new one.' 
+      });
+    }
+    
+    // Se é default, remover flag dos outros
+    let updatedPrompts = existingPrompts;
+    if (isDefault) {
+      updatedPrompts = existingPrompts.map(p => ({ ...p, isDefault: false }));
+    }
+    
+    // Adicionar ou atualizar prompt
+    const promptIndex = updatedPrompts.findIndex(p => p.id === promptId);
+    if (promptIndex >= 0) {
+      updatedPrompts[promptIndex] = promptData;
+    } else {
+      updatedPrompts.push(promptData);
+    }
+    
+    // Salvar configuração completa
+    const setupData = {
+      // Dados da empresa (só atualiza se fornecido ou se é primeiro setup)
+      companyName: companyName?.trim() || existingData?.companyName || '',
+      segment: segment || existingData?.segment || '',
+      segmentCustom: segmentCustom || existingData?.segmentCustom || '',
+      about: about || existingData?.about || '',
+      products: products || existingData?.products || [],
+      differentials: differentials || existingData?.differentials || [],
+      team: team || existingData?.team || [],
+      
+      // Idiomas
+      languages: languages || existingData?.languages || ['en'],
+      defaultLanguage: defaultLanguage || existingData?.defaultLanguage || 'en',
+      
+      // Voz (padrão coral)
+      voice: existingData?.voice || 'coral',
+      
+      // Prompts
+      prompts: updatedPrompts,
+      
+      // Metadata
+      isConfigured: true,
+      updatedAt: FieldValue.serverTimestamp()
+    };
+    
+    // Se é primeiro setup, adicionar createdAt
+    if (!existingData) {
+      setupData.createdAt = FieldValue.serverTimestamp();
+    }
+    
+    // Salvar no Firebase
+    await db.collection('settings').doc('setup').set(setupData, { merge: true });
+    
+    // Também atualizar o nome da empresa no settings/company (compatibilidade)
+    await db.collection('settings').doc('company').set({
+      companyName: setupData.companyName,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    
+    // Invalidar caches
+    settingsCache = null;
+    settingsCacheTime = 0;
+    companyNameCache = null;
+    companyNameCacheTime = 0;
+    
+    console.log('✅ Setup salvo:', {
+      companyName: setupData.companyName,
+      promptName: promptData.name,
+      totalPrompts: updatedPrompts.length
+    });
+    
+    return {
+      success: true,
+      promptId: promptId,
+      promptName: promptData.name,
+      totalPrompts: updatedPrompts.length,
+      isConfigured: true
+    };
+    
+  } catch (error) {
+    console.error('❌ Erro ao salvar setup:', error.message);
+    return reply.status(500).send({ error: error.message });
+  }
+});
+
+// Obter prompts do cliente
+fastify.get('/api/setup/prompts', async (request, reply) => {
+  if (!db) {
+    return reply.status(503).send({ error: 'Firebase not configured' });
+  }
+  
+  try {
+    const doc = await db.collection('settings').doc('setup').get();
+    
+    if (!doc.exists) {
+      return { prompts: [] };
+    }
+    
+    return {
+      prompts: doc.data().prompts || []
+    };
+  } catch (error) {
+    console.error('❌ Erro ao carregar prompts:', error.message);
+    return reply.status(500).send({ error: error.message });
+  }
+});
+
+// Obter um prompt específico
+fastify.get('/api/setup/prompts/:promptId', async (request, reply) => {
+  if (!db) {
+    return reply.status(503).send({ error: 'Firebase not configured' });
+  }
+  
+  try {
+    const { promptId } = request.params;
+    const doc = await db.collection('settings').doc('setup').get();
+    
+    if (!doc.exists) {
+      return reply.status(404).send({ error: 'Setup not found' });
+    }
+    
+    const prompts = doc.data().prompts || [];
+    const prompt = prompts.find(p => p.id === promptId);
+    
+    if (!prompt) {
+      return reply.status(404).send({ error: 'Prompt not found' });
+    }
+    
+    return prompt;
+  } catch (error) {
+    console.error('❌ Erro ao carregar prompt:', error.message);
+    return reply.status(500).send({ error: error.message });
+  }
+});
+
+// Atualizar prompt específico
+fastify.put('/api/setup/prompts/:promptId', async (request, reply) => {
+  if (!db) {
+    return reply.status(503).send({ error: 'Firebase not configured' });
+  }
+  
+  try {
+    const { promptId } = request.params;
+    const updates = request.body;
+    
+    const doc = await db.collection('settings').doc('setup').get();
+    
+    if (!doc.exists) {
+      return reply.status(404).send({ error: 'Setup not found' });
+    }
+    
+    const data = doc.data();
+    const prompts = data.prompts || [];
+    const promptIndex = prompts.findIndex(p => p.id === promptId);
+    
+    if (promptIndex < 0) {
+      return reply.status(404).send({ error: 'Prompt not found' });
+    }
+    
+    // Atualizar prompt
+    prompts[promptIndex] = {
+      ...prompts[promptIndex],
+      ...updates,
+      updatedAt: FieldValue.serverTimestamp()
+    };
+    
+    // Se está marcando como default, remover dos outros
+    if (updates.isDefault) {
+      prompts.forEach((p, i) => {
+        if (i !== promptIndex) p.isDefault = false;
+      });
+    }
+    
+    // Salvar
+    await db.collection('settings').doc('setup').update({
+      prompts,
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    
+    console.log('✅ Prompt atualizado:', promptId);
+    
+    return {
+      success: true,
+      prompt: prompts[promptIndex]
+    };
+    
+  } catch (error) {
+    console.error('❌ Erro ao atualizar prompt:', error.message);
+    return reply.status(500).send({ error: error.message });
+  }
+});
+
+// Deletar prompt
+fastify.delete('/api/setup/prompts/:promptId', async (request, reply) => {
+  if (!db) {
+    return reply.status(503).send({ error: 'Firebase not configured' });
+  }
+  
+  try {
+    const { promptId } = request.params;
+    
+    const doc = await db.collection('settings').doc('setup').get();
+    
+    if (!doc.exists) {
+      return reply.status(404).send({ error: 'Setup not found' });
+    }
+    
+    const data = doc.data();
+    let prompts = data.prompts || [];
+    
+    // Não permitir deletar se só tem 1 prompt
+    if (prompts.length <= 1) {
+      return reply.status(400).send({ error: 'Cannot delete the last prompt' });
+    }
+    
+    const promptToDelete = prompts.find(p => p.id === promptId);
+    if (!promptToDelete) {
+      return reply.status(404).send({ error: 'Prompt not found' });
+    }
+    
+    // Remover prompt
+    prompts = prompts.filter(p => p.id !== promptId);
+    
+    // Se era default, marcar outro como default
+    if (promptToDelete.isDefault && prompts.length > 0) {
+      prompts[0].isDefault = true;
+    }
+    
+    // Salvar
+    await db.collection('settings').doc('setup').update({
+      prompts,
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    
+    console.log('✅ Prompt deletado:', promptId);
+    
+    return {
+      success: true,
+      remainingPrompts: prompts.length
+    };
+    
+  } catch (error) {
+    console.error('❌ Erro ao deletar prompt:', error.message);
+    return reply.status(500).send({ error: error.message });
+  }
+});
+
+// Atualizar voz do assistente
+fastify.put('/api/setup/voice', async (request, reply) => {
+  if (!db) {
+    return reply.status(503).send({ error: 'Firebase not configured' });
+  }
+  
+  try {
+    const { voice } = request.body;
+    
+    const validVoices = ['coral', 'alloy', 'sage', 'shimmer', 'echo', 'onyx'];
+    if (!validVoices.includes(voice)) {
+      return reply.status(400).send({ error: 'Invalid voice. Valid options: ' + validVoices.join(', ') });
+    }
+    
+    await db.collection('settings').doc('setup').update({
+      voice,
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    
+    console.log('✅ Voz atualizada:', voice);
+    
+    return { success: true, voice };
+    
+  } catch (error) {
+    console.error('❌ Erro ao atualizar voz:', error.message);
     return reply.status(500).send({ error: error.message });
   }
 });
@@ -1278,13 +1648,13 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 // ============================================================================
-// HANDLER DE CONEXÕES WEBSOCKET
+// HANDLER DE CONEXÃ•ES WEBSOCKET
 // ============================================================================
 
 wss.on('connection', (twilioWs, request) => {
-  console.log('═══════════════════════════════════════════════════════');
-  console.log('🔌 WebSocket Twilio CONECTADO!');
-  console.log('═══════════════════════════════════════════════════════');
+  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('ðŸ”Œ WebSocket Twilio CONECTADO!');
+  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
   
   let streamSid = null;
   let callSid = null;
@@ -1306,34 +1676,34 @@ wss.on('connection', (twilioWs, request) => {
   // Conectar ao OpenAI
   // promptLang = idioma do SCRIPT/PROMPT
   // leadLang = idioma que o LEAD fala (voz da conversa)
-  // leadData = dados completos do lead (nome, email, endereço, etc)
+  // leadData = dados completos do lead (nome, email, endereÃ§o, etc)
   const connectToOpenAI = async (promptLang, leadLang, name, context, leadData = null) => {
     currentPromptLang = promptLang;
     currentLeadLang = leadLang;
     leadName = name;
     callContext = context;
     
-    console.log('🤖 Conectando ao OpenAI...');
-    console.log(`   📜 Idioma Prompt: ${promptLang.toUpperCase()}`);
-    console.log(`   🗣️ Idioma Conversa: ${leadLang.toUpperCase()}`);
+    console.log('ðŸ¤– Conectando ao OpenAI...');
+    console.log(`   ðŸ“œ Idioma Prompt: ${promptLang.toUpperCase()}`);
+    console.log(`   ðŸ—£ï¸ Idioma Conversa: ${leadLang.toUpperCase()}`);
     
     // Log detalhado dos dados do lead
     if (leadData) {
-      console.log('   📋 DADOS DO LEAD:');
-      console.log(`      Nome: ${leadData.name || '❌ NÃO CADASTRADO'}`);
-      console.log(`      Email: ${leadData.email || '❌ NÃO CADASTRADO'}`);
-      console.log(`      Telefone: ${leadData.phone || '❌ NÃO CADASTRADO'}`);
+      console.log('   ðŸ“‹ DADOS DO LEAD:');
+      console.log(`      Nome: ${leadData.name || 'âŒ NÃƒO CADASTRADO'}`);
+      console.log(`      Email: ${leadData.email || 'âŒ NÃƒO CADASTRADO'}`);
+      console.log(`      Telefone: ${leadData.phone || 'âŒ NÃƒO CADASTRADO'}`);
       const endereco = [leadData.street, leadData.city, leadData.state, leadData.zipCode].filter(Boolean).join(', ');
-      console.log(`      Endereço: ${endereco || '❌ NÃO CADASTRADO'}`);
+      console.log(`      EndereÃ§o: ${endereco || 'âŒ NÃƒO CADASTRADO'}`);
     } else {
-      console.log('   ⚠️ Nenhum dado do lead carregado');
+      console.log('   âš ï¸ Nenhum dado do lead carregado');
     }
     
-    if (context) console.log(`   🎯 Contexto: ${context.substring(0, 50)}...`);
+    if (context) console.log(`   ðŸŽ¯ Contexto: ${context.substring(0, 50)}...`);
     
-    // Carregar prompt com contexto específico, instrução de idioma E dados do lead
+    // Carregar prompt com contexto especÃ­fico, instruÃ§Ã£o de idioma E dados do lead
     const systemPrompt = await getSystemPrompt(promptLang, context, leadLang, leadData);
-    // Voz usa idioma do LEAD (não do prompt!)
+    // Voz usa idioma do LEAD (nÃ£o do prompt!)
     const voice = VOICES[leadLang] || VOICES.en;
     
     openAiWs = new WebSocket(OPENAI_REALTIME_URL, {
@@ -1344,8 +1714,8 @@ wss.on('connection', (twilioWs, request) => {
     });
 
     openAiWs.on('open', () => {
-      console.log('✅ OpenAI CONECTADO!');
-      console.log(`   🔊 Voz: ${voice} (baseado no idioma do lead: ${leadLang.toUpperCase()})`);
+      console.log('âœ… OpenAI CONECTADO!');
+      console.log(`   ðŸ”Š Voz: ${voice} (baseado no idioma do lead: ${leadLang.toUpperCase()})`);
       
       openAiWs.send(JSON.stringify({
         type: 'session.update',
@@ -1367,7 +1737,7 @@ wss.on('connection', (twilioWs, request) => {
       }));
       
       if (audioBuffer.length > 0) {
-        console.log(`📤 Enviando ${audioBuffer.length} pacotes bufferizados`);
+        console.log(`ðŸ“¤ Enviando ${audioBuffer.length} pacotes bufferizados`);
         audioBuffer.forEach(audio => {
           openAiWs.send(JSON.stringify({
             type: 'input_audio_buffer.append',
@@ -1383,15 +1753,15 @@ wss.on('connection', (twilioWs, request) => {
         const event = JSON.parse(data.toString());
         
         if (event.type === 'session.created') {
-          console.log('📋 session.created');
+          console.log('ðŸ“‹ session.created');
         }
         
         if (event.type === 'session.updated') {
-          console.log('📋 session.updated');
+          console.log('ðŸ“‹ session.updated');
           isOpenAiReady = true;
           
           setTimeout(async () => {
-            console.log('🎙️ Solicitando saudação da IA...');
+            console.log('ðŸŽ™ï¸ Solicitando saudaÃ§Ã£o da IA...');
             // Passa promptLang, leadName, context e leadLang
             const greetingInstructions = await getGreetingInstructions(currentPromptLang, leadName, callContext, currentLeadLang);
             openAiWs.send(JSON.stringify({
@@ -1406,7 +1776,7 @@ wss.on('connection', (twilioWs, request) => {
         
         if (event.type === 'response.audio.delta' && event.delta && streamSid) {
           if (audioPacketsSent === 0) {
-            console.log('🔊 Enviando primeiro pacote de áudio para Twilio');
+            console.log('ðŸ”Š Enviando primeiro pacote de Ã¡udio para Twilio');
           }
           
           twilioWs.send(JSON.stringify({
@@ -1417,14 +1787,14 @@ wss.on('connection', (twilioWs, request) => {
           
           audioPacketsSent++;
           if (audioPacketsSent % 50 === 0) {
-            console.log(`🔊 ${audioPacketsSent} pacotes de áudio enviados`);
+            console.log(`ðŸ”Š ${audioPacketsSent} pacotes de Ã¡udio enviados`);
           }
         }
         
         if (event.type === 'conversation.item.input_audio_transcription.completed') {
           const userText = event.transcript?.trim();
           if (userText) {
-            console.log(`👤 User: "${userText}"`);
+            console.log(`ðŸ‘¤ User: "${userText}"`);
             transcript.push({ role: 'user', text: userText });
             
             if (leadId && callDbId) {
@@ -1447,15 +1817,15 @@ wss.on('connection', (twilioWs, request) => {
         }
         
         if (event.type === 'input_audio_buffer.speech_started') {
-          console.log('🎤 User speaking...');
+          console.log('ðŸŽ¤ User speaking...');
         }
         
         if (event.type === 'input_audio_buffer.speech_stopped') {
-          console.log('🎤 User stopped speaking');
+          console.log('ðŸŽ¤ User stopped speaking');
         }
         
         if (event.type === 'error') {
-          console.error('❌ OpenAI Error:', JSON.stringify(event.error));
+          console.error('âŒ OpenAI Error:', JSON.stringify(event.error));
         }
         
       } catch (error) {
@@ -1464,12 +1834,12 @@ wss.on('connection', (twilioWs, request) => {
     });
 
     openAiWs.on('close', () => {
-      console.log('🔴 OpenAI desconectado');
+      console.log('ðŸ”´ OpenAI desconectado');
       isOpenAiReady = false;
     });
 
     openAiWs.on('error', (error) => {
-      console.error('❌ Erro OpenAI WebSocket:', error.message);
+      console.error('âŒ Erro OpenAI WebSocket:', error.message);
     });
   };
 
@@ -1480,12 +1850,12 @@ wss.on('connection', (twilioWs, request) => {
       messageCount++;
       
       if (data.event !== 'media') {
-        console.log(`📨 Twilio [${messageCount}]: ${data.event}`);
+        console.log(`ðŸ“¨ Twilio [${messageCount}]: ${data.event}`);
       }
 
       switch (data.event) {
         case 'connected':
-          console.log('🔗 Twilio Stream connected');
+          console.log('ðŸ”— Twilio Stream connected');
           break;
 
         case 'start':
@@ -1498,14 +1868,14 @@ wss.on('connection', (twilioWs, request) => {
           leadName = data.start.customParameters?.leadName || null;
           callContext = data.start.customParameters?.callContext || null;
           
-          console.log('═══════════════════════════════════════════════════════');
-          console.log('🎬 STREAM INICIADO!');
+          console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+          console.log('ðŸŽ¬ STREAM INICIADO!');
           console.log(`   StreamSid: ${streamSid}`);
           console.log(`   CallSid: ${callSid}`);
-          console.log(`   📜 Idioma Prompt: ${promptLang.toUpperCase()}`);
-          console.log(`   🗣️ Idioma Lead: ${leadLang.toUpperCase()}`);
-          if (leadName) console.log(`   👤 Lead: ${leadName}`);
-          if (callContext) console.log(`   🎯 Contexto: ${callContext.substring(0, 50)}...`);
+          console.log(`   ðŸ“œ Idioma Prompt: ${promptLang.toUpperCase()}`);
+          console.log(`   ðŸ—£ï¸ Idioma Lead: ${leadLang.toUpperCase()}`);
+          if (leadName) console.log(`   ðŸ‘¤ Lead: ${leadName}`);
+          if (callContext) console.log(`   ðŸŽ¯ Contexto: ${callContext.substring(0, 50)}...`);
           
           // Buscar dados COMPLETOS do lead do Firebase
           let leadData = null;
@@ -1523,8 +1893,8 @@ wss.on('connection', (twilioWs, request) => {
                 notes: lead.notes || '',
                 aiSummary: lead.aiSummary || ''
               };
-              console.log(`   📋 Dados do lead carregados: ${leadData.name}, ${leadData.email || 'sem email'}`);
-              if (leadData.city) console.log(`   🏠 Endereço: ${leadData.street}, ${leadData.city}, ${leadData.state} ${leadData.zipCode}`);
+              console.log(`   ðŸ“‹ Dados do lead carregados: ${leadData.name}, ${leadData.email || 'sem email'}`);
+              if (leadData.city) console.log(`   ðŸ  EndereÃ§o: ${leadData.street}, ${leadData.city}, ${leadData.state} ${leadData.zipCode}`);
             }
             
             callDbId = await createCallRecord(leadId, {
@@ -1533,9 +1903,9 @@ wss.on('connection', (twilioWs, request) => {
               language: leadLang,
               callContext: callContext || ''
             });
-            console.log(`   💾 Registro criado: ${callDbId}`);
+            console.log(`   ðŸ’¾ Registro criado: ${callDbId}`);
           }
-          console.log('═══════════════════════════════════════════════════════');
+          console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
           
           await connectToOpenAI(promptLang, leadLang, leadName, callContext, leadData);
           break;
@@ -1552,13 +1922,13 @@ wss.on('connection', (twilioWs, request) => {
             }
             
             if (messageCount % 100 === 0) {
-              console.log(`📦 ${messageCount} pacotes de áudio recebidos`);
+              console.log(`ðŸ“¦ ${messageCount} pacotes de Ã¡udio recebidos`);
             }
           }
           break;
 
         case 'stop':
-          console.log('🛑 Stream parado');
+          console.log('ðŸ›‘ Stream parado');
           
           const duration = Math.round((Date.now() - callStartTime) / 1000);
           
@@ -1568,13 +1938,13 @@ wss.on('connection', (twilioWs, request) => {
           if (transcript.length > 2) {
             const fullText = transcript.map(t => t.text).join(' ').toLowerCase();
             
-            if (fullText.includes('não') && (fullText.includes('interesse') || fullText.includes('obrigado'))) {
+            if (fullText.includes('nÃ£o') && (fullText.includes('interesse') || fullText.includes('obrigado'))) {
               intent = 'not_interested';
-            } else if (fullText.includes('manutenção') || fullText.includes('limpar') || fullText.includes('consertar')) {
+            } else if (fullText.includes('manutenÃ§Ã£o') || fullText.includes('limpar') || fullText.includes('consertar')) {
               intent = 'maintenance';
-            } else if (fullText.includes('quanto') || fullText.includes('preço') || fullText.includes('orçamento') || fullText.includes('instalar')) {
+            } else if (fullText.includes('quanto') || fullText.includes('preÃ§o') || fullText.includes('orÃ§amento') || fullText.includes('instalar')) {
               intent = 'purchase';
-            } else if (fullText.includes('informação') || fullText.includes('saber') || fullText.includes('dúvida')) {
+            } else if (fullText.includes('informaÃ§Ã£o') || fullText.includes('saber') || fullText.includes('dÃºvida')) {
               intent = 'info';
             }
             
@@ -1597,9 +1967,9 @@ wss.on('connection', (twilioWs, request) => {
   });
 
   twilioWs.on('close', () => {
-    console.log('═══════════════════════════════════════════════════════');
-    console.log(`🔌 Twilio desconectado (${messageCount} msgs)`);
-    console.log('═══════════════════════════════════════════════════════');
+    console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+    console.log(`ðŸ”Œ Twilio desconectado (${messageCount} msgs)`);
+    console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
     
     if (openAiWs?.readyState === WebSocket.OPEN) {
       openAiWs.close();
@@ -1607,12 +1977,12 @@ wss.on('connection', (twilioWs, request) => {
   });
 
   twilioWs.on('error', (error) => {
-    console.error('❌ Erro Twilio WebSocket:', error.message);
+    console.error('âŒ Erro Twilio WebSocket:', error.message);
   });
 });
 
 // ============================================================================
-// INICIALIZAÇÃO
+// INICIALIZAÃ‡ÃƒO
 // ============================================================================
 
 const startServer = async () => {
@@ -1621,44 +1991,44 @@ const startServer = async () => {
     
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`
-╔══════════════════════════════════════════════════════════════════════╗
-║          🏊 POOL LEADS AI AGENT - WebSocket Server v14 🏊            ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  Server: http://0.0.0.0:${PORT}                                         ║
-║  Model: ${OPENAI_MODEL}                                           ║
-║  Firebase: ${db ? '✅ Connected' : '⚠️ Not configured'}                                             ║
-║  Twilio: ${twilioClient ? '✅ Connected' : '⚠️ Not configured'}                                               ║
-║                                                                      ║
-║  🌐 IDIOMAS: EN, ES, PT                                              ║
-║  📜 promptLang = idioma do SCRIPT (instruções da IA)                 ║
-║  🗣️ leadLanguage = idioma da CONVERSA (voz da IA)                    ║
-║  📋 Dados do lead são carregados do Firebase automaticamente         ║
-║  🏢 Nome da empresa é carregado dinamicamente                        ║
-║                                                                      ║
-║  📞 CHAMADAS:                                                        ║
-║     POST /api/call        - Chamada única (busca dados do lead)      ║
-║     POST /api/call/batch  - Chamadas em série                        ║
-║     GET  /api/call/queue  - Status da fila                           ║
-║     DELETE /api/call/queue - Cancelar fila                           ║
-║                                                                      ║
-║  👥 LEADS:                                                           ║
-║     POST   /api/leads          - Criar lead                          ║
-║     GET    /api/leads          - Listar leads                        ║
-║     GET    /api/leads/:id      - Buscar lead                         ║
-║     PUT    /api/leads/:id      - Atualizar lead (todos os campos)    ║
-║     DELETE /api/leads/:id      - Deletar lead                        ║
-║     GET    /api/leads/:id/calls - Chamadas do lead                   ║
-║                                                                      ║
-║  📝 PROMPTS:                                                         ║
-║     GET    /api/prompts              - Ver prompts                   ║
-║     PUT    /api/prompts/system/:lang - Atualizar system prompt       ║
-║     PUT    /api/prompts/greeting/:lang - Atualizar saudação          ║
-║     DELETE /api/prompts              - Reset prompts                 ║
-║                                                                      ║
-║  ⚙️ SETTINGS:                                                        ║
-║     GET    /api/settings        - Obter configurações                ║
-║     PUT    /api/settings        - Salvar nome da empresa             ║
-╚══════════════════════════════════════════════════════════════════════╝
+â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+â•‘          ðŸŠ POOL LEADS AI AGENT - WebSocket Server v14 ðŸŠ            â•‘
+â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£
+â•‘  Server: http://0.0.0.0:${PORT}                                         â•‘
+â•‘  Model: ${OPENAI_MODEL}                                           â•‘
+â•‘  Firebase: ${db ? 'âœ… Connected' : 'âš ï¸ Not configured'}                                             â•‘
+â•‘  Twilio: ${twilioClient ? 'âœ… Connected' : 'âš ï¸ Not configured'}                                               â•‘
+â•‘                                                                      â•‘
+â•‘  ðŸŒ IDIOMAS: EN, ES, PT                                              â•‘
+â•‘  ðŸ“œ promptLang = idioma do SCRIPT (instruÃ§Ãµes da IA)                 â•‘
+â•‘  ðŸ—£ï¸ leadLanguage = idioma da CONVERSA (voz da IA)                    â•‘
+â•‘  ðŸ“‹ Dados do lead sÃ£o carregados do Firebase automaticamente         â•‘
+â•‘  ðŸ¢ Nome da empresa Ã© carregado dinamicamente                        â•‘
+â•‘                                                                      â•‘
+â•‘  ðŸ“ž CHAMADAS:                                                        â•‘
+â•‘     POST /api/call        - Chamada Ãºnica (busca dados do lead)      â•‘
+â•‘     POST /api/call/batch  - Chamadas em sÃ©rie                        â•‘
+â•‘     GET  /api/call/queue  - Status da fila                           â•‘
+â•‘     DELETE /api/call/queue - Cancelar fila                           â•‘
+â•‘                                                                      â•‘
+â•‘  ðŸ‘¥ LEADS:                                                           â•‘
+â•‘     POST   /api/leads          - Criar lead                          â•‘
+â•‘     GET    /api/leads          - Listar leads                        â•‘
+â•‘     GET    /api/leads/:id      - Buscar lead                         â•‘
+â•‘     PUT    /api/leads/:id      - Atualizar lead (todos os campos)    â•‘
+â•‘     DELETE /api/leads/:id      - Deletar lead                        â•‘
+â•‘     GET    /api/leads/:id/calls - Chamadas do lead                   â•‘
+â•‘                                                                      â•‘
+â•‘  ðŸ“ PROMPTS:                                                         â•‘
+â•‘     GET    /api/prompts              - Ver prompts                   â•‘
+â•‘     PUT    /api/prompts/system/:lang - Atualizar system prompt       â•‘
+â•‘     PUT    /api/prompts/greeting/:lang - Atualizar saudaÃ§Ã£o          â•‘
+â•‘     DELETE /api/prompts              - Reset prompts                 â•‘
+â•‘                                                                      â•‘
+â•‘  âš™ï¸ SETTINGS:                                                        â•‘
+â•‘     GET    /api/settings        - Obter configuraÃ§Ãµes                â•‘
+â•‘     PUT    /api/settings        - Salvar nome da empresa             â•‘
+â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     `);
     });
   } catch (err) {
