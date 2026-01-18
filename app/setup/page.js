@@ -8,41 +8,25 @@ import { useState, useEffect, useRef } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mmusa-production.up.railway.app';
 
-// Etapas do setup
+// Steps do setup
 const STEPS = [
-  { id: 'intro', title: 'Introduction', icon: '🚀', field: null },
-  { id: 'companyName', title: 'Company', icon: '🏢', field: 'companyName' },
-  { id: 'segment', title: 'Segment', icon: '🏷️', field: 'segment' },
-  { id: 'about', title: 'About', icon: '📝', field: 'about' },
-  { id: 'products', title: 'Products', icon: '📦', field: 'products' },
-  { id: 'differentials', title: 'Differentials', icon: '⭐', field: 'differentials' },
-  { id: 'team', title: 'Team', icon: '👥', field: 'team' },
-  { id: 'objective', title: 'Objective', icon: '🎯', field: 'objective' },
-  { id: 'personality', title: 'Personality', icon: '🎭', field: 'personality' },
-  { id: 'objections', title: 'Objections', icon: '💬', field: 'objections' },
-  { id: 'languages', title: 'Languages', icon: '🌐', field: 'languages' },
-  { id: 'review', title: 'Review', icon: '✅', field: null }
-];
-
-// Segmentos disponíveis
-const SEGMENTS = [
-  { id: 'pools', label: 'Pools & Spas', icon: '🏊' },
-  { id: 'realestate', label: 'Real Estate', icon: '🏠' },
-  { id: 'solar', label: 'Solar Energy', icon: '☀️' },
-  { id: 'automotive', label: 'Automotive', icon: '🚗' },
-  { id: 'healthcare', label: 'Healthcare', icon: '🏥' },
-  { id: 'insurance', label: 'Insurance', icon: '🛡️' },
-  { id: 'construction', label: 'Construction', icon: '🏗️' },
-  { id: 'finance', label: 'Finance', icon: '💰' },
-  { id: 'education', label: 'Education', icon: '📚' },
-  { id: 'other', label: 'Other', icon: '💼' }
+  { id: 'intro', title: 'Introduction', icon: '🚀' },
+  { id: 'companyName', title: 'Company', icon: '🏢' },
+  { id: 'about', title: 'About', icon: '📝' },
+  { id: 'products', title: 'Products', icon: '📦' },
+  { id: 'differentials', title: 'Differentials', icon: '⭐' },
+  { id: 'team', title: 'Team', icon: '👥' },
+  { id: 'objective', title: 'Objective', icon: '🎯' },
+  { id: 'personality', title: 'Personality', icon: '🎭' },
+  { id: 'objections', title: 'Objections', icon: '💬' },
+  { id: 'languages', title: 'Languages', icon: '🌐' }
 ];
 
 // Tons de voz
 const TONES = [
-  { id: 'friendly', label: 'Friendly', icon: '😊', desc: 'Warm and conversational, like talking to a helpful friend' },
-  { id: 'professional', label: 'Professional', icon: '👔', desc: 'Formal and polished, builds trust and credibility' },
-  { id: 'energetic', label: 'Energetic', icon: '⚡', desc: 'Upbeat and enthusiastic, creates excitement' }
+  { id: 'friendly', label: 'Friendly', icon: '😊', desc: 'Warm and conversational' },
+  { id: 'professional', label: 'Professional', icon: '👔', desc: 'Formal and polished' },
+  { id: 'energetic', label: 'Energetic', icon: '⚡', desc: 'Upbeat and enthusiastic' }
 ];
 
 // Nomes sugeridos
@@ -56,64 +40,105 @@ const LANGUAGES = [
 ];
 
 // ============================================================================
-// GERADOR DE SUGESTÕES (Simulado - será substituído por chamada à API)
+// GERADOR DE SUGESTÕES BASEADO NO CONTEXTO
 // ============================================================================
 
 const generateSuggestions = (step, data) => {
-  const { companyName, segment, about, products, differentials } = data;
-  const segmentLabel = SEGMENTS.find(s => s.id === segment)?.label || segment;
+  const { companyName, about } = data;
+  const aboutLower = (about || '').toLowerCase();
   
   switch (step) {
-    case 'about':
-      if (!companyName || !segment) return [];
-      return [
-        `${companyName} is a leading ${segmentLabel.toLowerCase()} company dedicated to providing exceptional service and quality solutions to our customers.`,
-        `We are ${companyName}, specialists in ${segmentLabel.toLowerCase()} with years of experience serving residential and commercial clients in the region.`,
-        `${companyName} offers comprehensive ${segmentLabel.toLowerCase()} services, combining expertise with personalized attention to meet each client's unique needs.`
-      ];
-      
     case 'products':
-      if (!segment) return [];
-      const productsBySegment = {
-        pools: ['Fiberglass pool installation', 'Vinyl liner pools', 'Concrete/Gunite pools', 'Pool renovation & remodeling', 'Pool maintenance services', 'Pool equipment & accessories'],
-        realestate: ['Residential sales', 'Commercial properties', 'Property management', 'Investment consulting', 'Rental services', 'Market analysis'],
-        solar: ['Solar panel installation', 'Battery storage systems', 'System maintenance', 'Energy consulting', 'Commercial solar', 'Residential solar'],
-        automotive: ['New vehicle sales', 'Used vehicle sales', 'Financing options', 'Trade-in services', 'Extended warranties', 'Service & maintenance'],
-        healthcare: ['Primary care', 'Specialist consultations', 'Diagnostic services', 'Preventive care', 'Telemedicine', 'Health plans'],
-        insurance: ['Auto insurance', 'Home insurance', 'Life insurance', 'Business insurance', 'Health insurance', 'Umbrella policies'],
-        construction: ['New construction', 'Renovations', 'Commercial building', 'Residential projects', 'Project management', 'Design services'],
-        finance: ['Investment advisory', 'Retirement planning', 'Wealth management', 'Tax planning', 'Estate planning', 'Business consulting'],
-        education: ['Online courses', 'Tutoring services', 'Test preparation', 'Professional development', 'Corporate training', 'Certification programs']
-      };
-      return productsBySegment[segment] || ['Service 1', 'Service 2', 'Service 3'];
+      // Analisa o "about" para sugerir produtos/serviços relevantes
+      const productSuggestions = [];
+      
+      // Pool related
+      if (aboutLower.includes('pool') || aboutLower.includes('piscina')) {
+        productSuggestions.push('Pool installation', 'Pool maintenance', 'Pool renovation', 'Pool equipment', 'Pool cleaning', 'Pool heating systems');
+      }
+      // Real estate
+      if (aboutLower.includes('real estate') || aboutLower.includes('property') || aboutLower.includes('home') || aboutLower.includes('house')) {
+        productSuggestions.push('Property sales', 'Property rentals', 'Property management', 'Home valuations', 'Investment consulting');
+      }
+      // Solar
+      if (aboutLower.includes('solar') || aboutLower.includes('energy') || aboutLower.includes('panel')) {
+        productSuggestions.push('Solar panel installation', 'Energy consulting', 'Battery storage', 'System maintenance', 'Commercial solar');
+      }
+      // Construction
+      if (aboutLower.includes('construction') || aboutLower.includes('build') || aboutLower.includes('renovation') || aboutLower.includes('remodel')) {
+        productSuggestions.push('New construction', 'Renovations', 'Remodeling', 'Project management', 'Design services');
+      }
+      // Services generic
+      if (aboutLower.includes('service') || aboutLower.includes('consult')) {
+        productSuggestions.push('Consulting services', 'On-site visits', 'Phone support', 'Maintenance plans');
+      }
+      // Insurance
+      if (aboutLower.includes('insurance')) {
+        productSuggestions.push('Home insurance', 'Auto insurance', 'Life insurance', 'Business insurance', 'Health insurance');
+      }
+      // Healthcare
+      if (aboutLower.includes('health') || aboutLower.includes('medical') || aboutLower.includes('doctor') || aboutLower.includes('clinic')) {
+        productSuggestions.push('Consultations', 'Check-ups', 'Treatments', 'Preventive care', 'Telemedicine');
+      }
+      
+      // Se não encontrou nada específico, sugestões genéricas
+      if (productSuggestions.length === 0) {
+        productSuggestions.push('Consultation services', 'Product sales', 'Installation services', 'Maintenance plans', 'Custom solutions');
+      }
+      
+      return productSuggestions.slice(0, 8);
       
     case 'differentials':
-      return [
-        'Over 15 years of industry experience',
-        'Licensed and fully insured',
-        'Free consultations and quotes',
-        'Flexible financing options available',
-        '100% satisfaction guarantee',
-        'Award-winning customer service',
-        'Same-day response time',
-        'Locally owned and operated'
-      ];
+      const diffSuggestions = [];
+      
+      // Anos de experiência
+      const yearsMatch = about?.match(/(\d+)\s*(years?|anos?)/i);
+      if (yearsMatch) {
+        diffSuggestions.push(`${yearsMatch[1]}+ years of experience`);
+      }
+      
+      // Localização
+      if (aboutLower.includes('florida') || aboutLower.includes('miami') || aboutLower.includes('local')) {
+        diffSuggestions.push('Local expertise', 'Know the area well');
+      }
+      
+      // Família/próprio
+      if (aboutLower.includes('family') || aboutLower.includes('own') || aboutLower.includes('founded')) {
+        diffSuggestions.push('Family-owned business', 'Owner-operated');
+      }
+      
+      // Sugestões padrão
+      diffSuggestions.push(
+        'Licensed and insured',
+        'Free quotes',
+        'Flexible financing',
+        'Satisfaction guarantee',
+        'Fast response time',
+        'Quality workmanship',
+        'Competitive pricing',
+        'Professional team'
+      );
+      
+      return [...new Set(diffSuggestions)].slice(0, 8);
       
     case 'objective':
-      return [
-        `Qualify interested leads and schedule in-person consultations to discuss their ${segmentLabel.toLowerCase()} needs.`,
-        `Collect detailed information about the prospect's requirements and provide initial pricing estimates.`,
-        `Re-engage previous leads who showed interest but haven't moved forward, understanding their concerns.`,
-        `Confirm appointments and ensure prospects are prepared for their upcoming consultations.`
+      const objectives = [
+        `Qualify interested leads and schedule consultations for ${companyName}`,
+        'Collect contact information and understand customer needs',
+        'Answer questions and provide initial information about services',
+        'Schedule appointments and confirm availability',
+        'Follow up with previous leads who showed interest',
+        'Re-engage past customers for new opportunities'
       ];
+      return objectives;
       
     case 'objections':
       return [
-        { objection: "It's too expensive", response: "I understand budget is important. We offer flexible financing options and can work with you to find a solution that fits your needs." },
-        { objection: "I need to think about it", response: "Of course! Would it help if I sent you some additional information to review? I can also schedule a follow-up call for when you're ready." },
-        { objection: "I'm just looking around", response: "That's great - it's smart to explore your options. Would you like me to send you a comparison guide to help with your research?" },
-        { objection: "Now is not a good time", response: "No problem at all. When would be a better time for us to connect? I can schedule a call that works with your schedule." },
-        { objection: "I had a bad experience before", response: "I'm sorry to hear that. We take customer satisfaction very seriously. Can you tell me more about what happened so we can make sure it doesn't happen again?" }
+        { objection: "It's too expensive", response: "I understand budget is important. We offer flexible financing options and can work within your budget." },
+        { objection: "I need to think about it", response: "Of course, take your time. Would you like me to send you some information to review?" },
+        { objection: "I'm just looking around", response: "That's great! It's smart to explore options. Would a free quote help you compare?" },
+        { objection: "Now is not a good time", response: "No problem. When would be a better time for us to connect?" },
+        { objection: "I already have someone", response: "That's fine! If you ever need a second opinion or backup option, we're here." }
       ];
       
     default:
@@ -126,19 +151,19 @@ const generateSuggestions = (step, data) => {
 // ============================================================================
 
 export default function SetupPage() {
+  // Estados principais
+  const [phase, setPhase] = useState('chat'); // 'chat' | 'building' | 'review' | 'reformulate'
   const [currentStep, setCurrentStep] = useState(0);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingField, setEditingField] = useState(null);
+  const [reformulateStep, setReformulateStep] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isCheckingSetup, setIsCheckingSetup] = useState(true);
-  const [mode, setMode] = useState('onboarding'); // 'onboarding' | 'new_prompt'
+  const [buildProgress, setBuildProgress] = useState(0);
+  const [buildStage, setBuildStage] = useState('');
   
   // Dados do setup
   const [data, setData] = useState({
     companyName: '',
-    segment: '',
-    segmentCustom: '',
     about: '',
     products: [],
     differentials: [],
@@ -155,7 +180,6 @@ export default function SetupPage() {
   const [tempTeamMember, setTempTeamMember] = useState({ name: '', role: '' });
   
   const inputRef = useRef(null);
-  const containerRef = useRef(null);
 
   // ============================================================================
   // VERIFICAR SETUP EXISTENTE
@@ -172,22 +196,18 @@ export default function SetupPage() {
         
         if (result.isConfigured && result.data) {
           if (isNewPrompt) {
-            // Modo novo prompt - pular para objetivo
-            setMode('new_prompt');
+            // Modo novo prompt - carregar dados existentes e ir para objetivo
             setData(prev => ({
               ...prev,
               companyName: result.data.companyName || '',
-              segment: result.data.segment || '',
               about: result.data.about || '',
               products: result.data.products || [],
               differentials: result.data.differentials || [],
               team: result.data.team || [],
               languages: result.data.languages || ['en']
             }));
-            // Ir direto para o objetivo (índice 7)
-            setCurrentStep(7);
+            setCurrentStep(6); // Vai para objetivo
           } else {
-            // Já configurado - redirecionar
             window.location.href = '/';
             return;
           }
@@ -203,10 +223,12 @@ export default function SetupPage() {
     checkSetup();
   }, []);
 
-  // Focus no input quando muda de step
+  // Focus no input
   useEffect(() => {
-    setTimeout(() => inputRef.current?.focus(), 100);
-  }, [currentStep, isEditing]);
+    if (phase === 'chat' || phase === 'reformulate') {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [currentStep, phase, reformulateStep]);
 
   // ============================================================================
   // HELPERS
@@ -216,88 +238,31 @@ export default function SetupPage() {
     setData(prev => ({ ...prev, [field]: value }));
   };
   
-  const getCurrentStepData = () => STEPS[currentStep];
-  
-  const getFieldValue = (field) => {
-    if (!field) return null;
-    // Caso especial para segment - também verificar segmentCustom
-    if (field === 'segment') {
-      return data.segment || data.segmentCustom || null;
-    }
-    const value = data[field];
-    if (Array.isArray(value)) return value.length > 0 ? value : null;
-    if (typeof value === 'object') return Object.keys(value).length > 0 ? value : null;
-    return value || null;
-  };
-  
-  const getFieldDisplayValue = (field) => {
-    const value = getFieldValue(field);
-    if (!value) return null;
-    
-    switch (field) {
-      case 'companyName':
-        return value;
-      case 'segment':
-        if (data.segmentCustom) return `💼 ${data.segmentCustom}`;
-        const seg = SEGMENTS.find(s => s.id === value);
-        return seg ? `${seg.icon} ${seg.label}` : value;
-      case 'about':
-        return value.length > 60 ? value.substring(0, 60) + '...' : value;
-      case 'products':
-      case 'differentials':
-        return value.slice(0, 3).join(', ') + (value.length > 3 ? ` +${value.length - 3}` : '');
-      case 'team':
-        return value.map(t => t.name).join(', ') || 'Skipped';
-      case 'objective':
-        return value.length > 60 ? value.substring(0, 60) + '...' : value;
-      case 'personality':
-        const tone = TONES.find(t => t.id === data.tone);
-        return `${data.assistantName || 'Julia'} • ${tone?.icon || '😊'} ${tone?.label || 'Friendly'}`;
-      case 'objections':
-        return value.length > 0 ? `${value.length} configured` : 'Skipped';
-      case 'languages':
-        return value.map(l => LANGUAGES.find(lang => lang.id === l)?.flag || l).join(' ');
-      default:
-        return null;
-    }
-  };
-  
-  const isStepComplete = (stepIndex) => {
-    const step = STEPS[stepIndex];
-    if (!step.field) return stepIndex < currentStep;
-    
-    // Campos opcionais
-    if (['team', 'objections'].includes(step.field)) return stepIndex < currentStep;
-    
-    // Personalidade é especial
-    if (step.field === 'personality') {
-      return data.assistantName && data.tone;
-    }
-    
-    return getFieldValue(step.field) !== null;
-  };
-  
   const canProceed = () => {
-    const step = getCurrentStepData();
-    if (!step.field) return true; // intro e review
+    const step = STEPS[currentStep];
     
-    // Campos opcionais
-    if (['team', 'objections'].includes(step.id)) return true;
-    
-    // Personalidade
-    if (step.id === 'personality') {
-      return data.assistantName && data.tone;
+    switch (step?.id) {
+      case 'intro': return true;
+      case 'companyName': return data.companyName.trim().length > 0;
+      case 'about': return data.about.trim().length > 20;
+      case 'products': return data.products.length > 0;
+      case 'differentials': return data.differentials.length > 0;
+      case 'team': return true; // Opcional
+      case 'objective': return data.objective.trim().length > 0;
+      case 'personality': return data.tone && data.assistantName;
+      case 'objections': return true; // Opcional
+      case 'languages': return data.languages.length > 0;
+      default: return true;
     }
-    
-    return getFieldValue(step.field) !== null;
   };
 
   const goToNext = () => {
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(currentStep + 1);
       setTempInput('');
-      setIsEditing(false);
-      setEditingField(null);
+    } else {
+      // Último step - iniciar construção
+      startBuilding();
     }
   };
   
@@ -307,25 +272,53 @@ export default function SetupPage() {
       setTempInput('');
     }
   };
+
+  // ============================================================================
+  // BUILDING ANIMATION
+  // ============================================================================
   
-  const startEditing = (stepIndex) => {
-    if (stepIndex < currentStep) {
-      setEditingField(STEPS[stepIndex].id);
-      setIsEditing(true);
-      setCurrentStep(stepIndex);
-    }
-  };
-  
-  const cancelEditing = () => {
-    setIsEditing(false);
-    setEditingField(null);
-    // Voltar para o step mais avançado que ainda precisa ser completado
-    const lastCompleteIndex = STEPS.findIndex((s, i) => !isStepComplete(i) && i > 0);
-    setCurrentStep(lastCompleteIndex > 0 ? lastCompleteIndex : currentStep);
+  const startBuilding = () => {
+    setPhase('building');
+    setBuildProgress(0);
+    
+    const stages = [
+      { progress: 20, text: 'Analyzing your business profile...' },
+      { progress: 40, text: 'Setting up AI personality...' },
+      { progress: 60, text: 'Configuring conversation flows...' },
+      { progress: 80, text: 'Optimizing responses...' },
+      { progress: 100, text: 'Final touches...' }
+    ];
+    
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i < stages.length) {
+        setBuildProgress(stages[i].progress);
+        setBuildStage(stages[i].text);
+        i++;
+      } else {
+        clearInterval(interval);
+        setTimeout(() => setPhase('review'), 500);
+      }
+    }, 800);
   };
 
   // ============================================================================
-  // SAVE SETUP
+  // REFORMULATE
+  // ============================================================================
+  
+  const startReformulate = (stepId) => {
+    setReformulateStep(stepId);
+    setPhase('reformulate');
+    setTempInput('');
+  };
+  
+  const cancelReformulate = () => {
+    setReformulateStep(null);
+    setPhase('review');
+  };
+
+  // ============================================================================
+  // SAVE
   // ============================================================================
   
   const generatePromptContent = () => {
@@ -335,7 +328,7 @@ export default function SetupPage() {
       energetic: 'upbeat, enthusiastic, and engaging'
     };
     
-    return `You are ${data.assistantName || 'Julia'}, an AI assistant for ${data.companyName}.
+    return `You are ${data.assistantName}, an AI assistant for ${data.companyName}.
 
 ## ABOUT THE COMPANY
 ${data.about}
@@ -377,8 +370,8 @@ ${data.objections.map(o => `If they say "${o.objection}":
         body: JSON.stringify({
           ...data,
           generatedPrompt: generatePromptContent(),
-          promptName: mode === 'new_prompt' ? 'New Prompt' : 'First Contact',
-          isDefault: mode === 'onboarding'
+          promptName: 'First Contact',
+          isDefault: true
         })
       });
       
@@ -409,63 +402,94 @@ ${data.objections.map(o => `If they say "${o.objection}":
   }
 
   // ============================================================================
-  // RENDER - QUESTION CONTENT
+  // RENDER - PROGRESS DOTS
   // ============================================================================
   
-  const renderQuestionContent = () => {
-    const step = getCurrentStepData();
-    const suggestions = generateSuggestions(step.id, data);
+  const renderProgressDots = () => (
+    <div className="flex items-center justify-center gap-2 mb-8">
+      {STEPS.map((step, index) => (
+        <div
+          key={step.id}
+          className={`w-3 h-3 rounded-full transition-all duration-300 ${
+            index < currentStep
+              ? 'bg-violet-500'
+              : index === currentStep
+                ? 'bg-violet-500 ring-4 ring-violet-500/30'
+                : 'bg-gray-700'
+          }`}
+          title={step.title}
+        />
+      ))}
+    </div>
+  );
+
+  // ============================================================================
+  // RENDER - CHAT STEP CONTENT
+  // ============================================================================
+  
+  const renderChatContent = () => {
+    const step = STEPS[currentStep];
+    const suggestions = generateSuggestions(step?.id, data);
     
-    switch (step.id) {
+    switch (step?.id) {
       // ==================== INTRO ====================
       case 'intro':
         return (
           <div className="space-y-6">
-            <div className="space-y-4">
-              <h2 className="text-3xl font-bold text-white">
-                Let's build your AI assistant
-              </h2>
-              <p className="text-gray-400 text-lg leading-relaxed">
-                In the next few minutes, we'll create a custom <span className="text-violet-400 font-medium">prompt</span> — 
-                the instructions that tell your AI exactly how to behave on calls.
-              </p>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+                🤖
+              </div>
+              <div className="space-y-4 flex-1">
+                <h2 className="text-2xl font-bold text-white">
+                  Welcome! Let's build your AI assistant.
+                </h2>
+                <p className="text-gray-300 leading-relaxed">
+                  In the next few minutes, I'll ask you some questions about your business. 
+                  Your answers will help me create a custom <span className="text-violet-400 font-medium">prompt</span> — 
+                  the instructions that tell your AI exactly how to behave on calls.
+                </p>
+              </div>
             </div>
             
-            <div className="bg-violet-500/10 border border-violet-500/20 rounded-2xl p-6 space-y-4">
-              <h3 className="text-violet-400 font-semibold flex items-center gap-2">
+            <div className="bg-violet-500/10 border border-violet-500/20 rounded-2xl p-5 ml-16">
+              <h3 className="text-violet-400 font-semibold flex items-center gap-2 mb-3">
                 <span>💡</span> What is a prompt?
               </h3>
-              <p className="text-gray-300 leading-relaxed">
-                A prompt is like a detailed briefing for your AI. It includes your company info, 
-                what you sell, how you want the AI to talk, and what goals it should achieve. 
-                The better the prompt, the more natural and effective your AI will be.
+              <p className="text-gray-300 leading-relaxed text-sm">
+                Think of it as a detailed briefing. It includes who you are, what you sell, 
+                how you want your AI to talk, and what goals it should achieve. 
+                The better the information you provide, the more natural and effective your AI will be.
               </p>
             </div>
             
-            <div className="bg-gray-800/50 rounded-2xl p-6 space-y-3">
-              <h3 className="text-white font-semibold">Here's what we'll cover:</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li className="flex items-center gap-3">
-                  <span className="text-violet-400">✓</span> Your company details
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="text-violet-400">✓</span> Products and services you offer
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="text-violet-400">✓</span> The goal of your calls
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="text-violet-400">✓</span> Your AI's personality
-                </li>
-              </ul>
+            <div className="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5 ml-16">
+              <h3 className="text-white font-semibold mb-3">Here's what we'll cover:</h3>
+              <div className="grid grid-cols-2 gap-2 text-sm text-gray-400">
+                <div className="flex items-center gap-2"><span className="text-violet-400">✓</span> Your company & what you do</div>
+                <div className="flex items-center gap-2"><span className="text-violet-400">✓</span> Products and services</div>
+                <div className="flex items-center gap-2"><span className="text-violet-400">✓</span> What makes you special</div>
+                <div className="flex items-center gap-2"><span className="text-violet-400">✓</span> Goals for your calls</div>
+                <div className="flex items-center gap-2"><span className="text-violet-400">✓</span> AI personality</div>
+                <div className="flex items-center gap-2"><span className="text-violet-400">✓</span> Handling objections</div>
+              </div>
             </div>
             
-            <button
-              onClick={goToNext}
-              className="w-full py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-xl font-semibold text-lg transition-all duration-300 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40"
-            >
-              Let's Start →
-            </button>
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 ml-16">
+              <p className="text-amber-200/90 text-sm">
+                <span className="font-medium text-amber-400">📝 Note:</span> You can always come back and change any answer later. 
+                But take your time now — this is the foundation for how your AI will represent your business.
+              </p>
+            </div>
+            
+            <div className="ml-16">
+              <button
+                onClick={goToNext}
+                className="w-full py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-xl font-semibold text-lg transition-all duration-300 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40"
+              >
+                Let's Start →
+              </button>
+            </div>
           </div>
         );
         
@@ -473,119 +497,49 @@ ${data.objections.map(o => `If they say "${o.objection}":
       case 'companyName':
         return (
           <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-white">
-                What's your company name?
-              </h2>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                <p className="text-amber-200/80 text-sm">
-                  <span className="font-medium text-amber-400">💡 Why this matters:</span> This is how your AI will introduce itself on every call. 
-                  "Hi, I'm calling from <span className="text-white font-medium">[Your Company]</span>..."
-                </p>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+                🤖
+              </div>
+              <div className="space-y-3 flex-1">
+                <h2 className="text-2xl font-bold text-white">
+                  What's your company name?
+                </h2>
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+                  <p className="text-amber-200/80 text-sm">
+                    <span className="font-medium text-amber-400">💡</span> This is how your AI will introduce itself: 
+                    <span className="text-white"> "Hi, I'm calling from <strong>[your company]</strong>..."</span>
+                  </p>
+                </div>
               </div>
             </div>
             
-            <input
-              ref={inputRef}
-              type="text"
-              value={data.companyName}
-              onChange={(e) => updateData('companyName', e.target.value)}
-              placeholder="e.g., Sunshine Pools"
-              className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-5 py-4 text-lg outline-none transition-all duration-300 placeholder:text-gray-500"
-              onKeyDown={(e) => e.key === 'Enter' && canProceed() && goToNext()}
-            />
-            
-            <div className="flex gap-3">
-              <button
-                onClick={goToPrev}
-                className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={goToNext}
-                disabled={!canProceed()}
-                className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
-              >
-                Continue →
-              </button>
-            </div>
-          </div>
-        );
-        
-      // ==================== SEGMENT ====================
-      case 'segment':
-        return (
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-white">
-                What industry is {data.companyName} in?
-              </h2>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                <p className="text-amber-200/80 text-sm">
-                  <span className="font-medium text-amber-400">💡 Why this matters:</span> This helps your AI use the right vocabulary and understand 
-                  industry-specific terms your customers might use.
-                </p>
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400 font-medium">
-                💬 SELECT YOUR INDUSTRY <span className="text-gray-500">— or type your own below</span>
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                {SEGMENTS.filter(s => s.id !== 'other').map(seg => (
-                  <button
-                    key={seg.id}
-                    onClick={() => {
-                      updateData('segment', seg.id);
-                      updateData('segmentCustom', '');
-                    }}
-                    className={`p-4 rounded-xl border-2 transition-all duration-300 text-left ${
-                      data.segment === seg.id && !data.segmentCustom
-                        ? 'border-violet-500 bg-violet-500/20 shadow-lg shadow-violet-500/20'
-                        : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'
-                    }`}
-                  >
-                    <span className="text-2xl">{seg.icon}</span>
-                    <span className="block mt-2 font-medium">{seg.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400 font-medium">
-                ✍️ OR TYPE YOUR OWN
-              </p>
+            <div className="ml-16 space-y-4">
               <input
+                ref={inputRef}
                 type="text"
-                value={data.segmentCustom}
-                onChange={(e) => {
-                  updateData('segmentCustom', e.target.value);
-                  if (e.target.value.trim()) {
-                    updateData('segment', 'custom');
-                  }
-                }}
-                placeholder="e.g., Pet grooming, Event planning, HVAC..."
+                value={data.companyName}
+                onChange={(e) => updateData('companyName', e.target.value)}
+                placeholder="e.g., Sunshine Pools"
                 className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-5 py-4 text-lg outline-none transition-all duration-300 placeholder:text-gray-500"
+                onKeyDown={(e) => e.key === 'Enter' && canProceed() && goToNext()}
               />
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={goToPrev}
-                className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={goToNext}
-                disabled={!data.segment && !data.segmentCustom}
-                className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
-              >
-                Continue →
-              </button>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={goToPrev}
+                  className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={goToNext}
+                  disabled={!canProceed()}
+                  className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
+                >
+                  Continue →
+                </button>
+              </div>
             </div>
           </div>
         );
@@ -594,289 +548,288 @@ ${data.objections.map(o => `If they say "${o.objection}":
       case 'about':
         return (
           <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-white">
-                Tell me about {data.companyName}
-              </h2>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                <p className="text-amber-200/80 text-sm">
-                  <span className="font-medium text-amber-400">💡 Why this matters:</span> This gives your AI context about your business — 
-                  where you operate, how long you've been around, and what makes you special.
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+                🤖
+              </div>
+              <div className="space-y-3 flex-1">
+                <h2 className="text-2xl font-bold text-white">
+                  Tell me about {data.companyName}
+                </h2>
+                <p className="text-gray-400">
+                  What do you do? Where do you operate? Who are your customers? 
+                  Just write naturally, like you're explaining to a friend.
                 </p>
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+                  <p className="text-amber-200/80 text-sm">
+                    <span className="font-medium text-amber-400">💡</span> This is the most important step. 
+                    Everything else will be based on what you write here.
+                  </p>
+                </div>
               </div>
             </div>
             
-            {suggestions.length > 0 && (
-              <div className="space-y-3">
-                <p className="text-sm text-gray-400 font-medium">
-                  💬 SUGGESTIONS <span className="text-gray-500">— click to use, or write your own</span>
+            <div className="ml-16 space-y-4">
+              <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-4">
+                <p className="text-gray-500 text-sm mb-2">💬 Example:</p>
+                <p className="text-gray-400 text-sm italic">
+                  "We install fiberglass and vinyl pools for homeowners in South Florida. 
+                  Been in business for 12 years, mostly serving Miami-Dade and Broward counties. 
+                  We also do pool renovations and maintenance."
                 </p>
-                <div className="space-y-2">
-                  {suggestions.map((suggestion, i) => (
-                    <button
-                      key={i}
-                      onClick={() => updateData('about', suggestion)}
-                      className={`w-full p-4 rounded-xl border-2 text-left transition-all duration-300 ${
-                        data.about === suggestion
-                          ? 'border-violet-500 bg-violet-500/20'
-                          : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'
-                      }`}
-                    >
-                      <p className="text-gray-300 text-sm leading-relaxed">{suggestion}</p>
-                    </button>
-                  ))}
-                </div>
               </div>
-            )}
-            
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400 font-medium">
-                ✍️ OR WRITE YOUR OWN
-              </p>
+              
               <textarea
                 ref={inputRef}
                 value={data.about}
                 onChange={(e) => updateData('about', e.target.value)}
-                placeholder="Describe your company, what you do, and the area you serve..."
-                rows={4}
+                placeholder="Describe your business..."
+                rows={5}
                 className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-5 py-4 text-base outline-none transition-all duration-300 placeholder:text-gray-500 resize-none"
               />
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={goToPrev}
-                className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={goToNext}
-                disabled={!canProceed()}
-                className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
-              >
-                Continue →
-              </button>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={goToPrev}
+                  className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={goToNext}
+                  disabled={!canProceed()}
+                  className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
+                >
+                  Continue →
+                </button>
+              </div>
             </div>
           </div>
         );
         
       // ==================== PRODUCTS ====================
       case 'products':
-        const productSuggestions = generateSuggestions('products', data);
         return (
           <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-white">
-                What products or services do you offer?
-              </h2>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                <p className="text-amber-200/80 text-sm">
-                  <span className="font-medium text-amber-400">💡 Why this matters:</span> Your AI needs to know what products and services 
-                  it can discuss and offer to potential customers.
-                </p>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+                🤖
               </div>
-            </div>
-            
-            {/* Selected products */}
-            {data.products.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {data.products.map((product, i) => (
-                  <span
-                    key={i}
-                    className="px-4 py-2 bg-violet-500/20 border border-violet-500/50 rounded-full text-sm flex items-center gap-2"
-                  >
-                    {product}
-                    <button
-                      onClick={() => updateData('products', data.products.filter((_, idx) => idx !== i))}
-                      className="hover:text-red-400 transition-colors"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            
-            {/* Suggestions */}
-            {productSuggestions.length > 0 && (
-              <div className="space-y-3">
-                <p className="text-sm text-gray-400 font-medium">
-                  💬 SUGGESTIONS <span className="text-gray-500">— click to add, or type your own below</span>
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {productSuggestions
-                    .filter(p => !data.products.includes(p))
-                    .map((product, i) => (
-                      <button
-                        key={i}
-                        onClick={() => updateData('products', [...data.products, product])}
-                        className="px-4 py-2 bg-gray-800/80 hover:bg-gray-700 border border-gray-700 rounded-full text-sm transition-colors"
-                      >
-                        + {product}
-                      </button>
-                    ))}
+              <div className="space-y-3 flex-1">
+                <h2 className="text-2xl font-bold text-white">
+                  What products or services do you offer?
+                </h2>
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+                  <p className="text-amber-200/80 text-sm">
+                    <span className="font-medium text-amber-400">💡</span> Your AI needs to know what it can discuss and offer to customers.
+                  </p>
                 </div>
               </div>
-            )}
-            
-            {/* Custom input */}
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400 font-medium">
-                ✍️ ADD YOUR OWN PRODUCT OR SERVICE
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={tempInput}
-                  onChange={(e) => setTempInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && tempInput.trim()) {
-                      updateData('products', [...data.products, tempInput.trim()]);
-                      setTempInput('');
-                    }
-                  }}
-                  placeholder="Type a product or service and press Enter..."
-                  className="flex-1 bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none transition-all duration-300 placeholder:text-gray-500"
-                />
-                <button
-                  onClick={() => {
-                    if (tempInput.trim()) {
-                      updateData('products', [...data.products, tempInput.trim()]);
-                      setTempInput('');
-                    }
-                  }}
-                  disabled={!tempInput.trim()}
-                  className="px-5 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-xl transition-colors"
-                >
-                  Add
-                </button>
-              </div>
             </div>
             
-            <div className="flex gap-3">
-              <button
-                onClick={goToPrev}
-                className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={goToNext}
-                disabled={!canProceed()}
-                className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
-              >
-                Continue →
-              </button>
+            <div className="ml-16 space-y-4">
+              {/* Selected */}
+              {data.products.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {data.products.map((product, i) => (
+                    <span
+                      key={i}
+                      className="px-4 py-2 bg-violet-500/20 border border-violet-500/50 rounded-full text-sm flex items-center gap-2"
+                    >
+                      {product}
+                      <button
+                        onClick={() => updateData('products', data.products.filter((_, idx) => idx !== i))}
+                        className="hover:text-red-400 transition-colors"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              
+              {/* Suggestions */}
+              {suggestions.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-400">
+                    💬 Based on your description, you might offer:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestions
+                      .filter(p => !data.products.includes(p))
+                      .map((product, i) => (
+                        <button
+                          key={i}
+                          onClick={() => updateData('products', [...data.products, product])}
+                          className="px-4 py-2 bg-gray-800/80 hover:bg-gray-700 border border-gray-700 rounded-full text-sm transition-colors"
+                        >
+                          + {product}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Custom input */}
+              <div className="space-y-2">
+                <p className="text-sm text-gray-400">✍️ Or add your own:</p>
+                <div className="flex gap-2">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={tempInput}
+                    onChange={(e) => setTempInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && tempInput.trim()) {
+                        updateData('products', [...data.products, tempInput.trim()]);
+                        setTempInput('');
+                      }
+                    }}
+                    placeholder="Type and press Enter..."
+                    className="flex-1 bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none transition-all duration-300 placeholder:text-gray-500"
+                  />
+                  <button
+                    onClick={() => {
+                      if (tempInput.trim()) {
+                        updateData('products', [...data.products, tempInput.trim()]);
+                        setTempInput('');
+                      }
+                    }}
+                    disabled={!tempInput.trim()}
+                    className="px-5 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-xl transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={goToPrev}
+                  className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={goToNext}
+                  disabled={!canProceed()}
+                  className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
+                >
+                  Continue →
+                </button>
+              </div>
             </div>
           </div>
         );
         
       // ==================== DIFFERENTIALS ====================
       case 'differentials':
-        const diffSuggestions = generateSuggestions('differentials', data);
         return (
           <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-white">
-                What makes {data.companyName} special?
-              </h2>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                <p className="text-amber-200/80 text-sm">
-                  <span className="font-medium text-amber-400">💡 Why this matters:</span> These are the selling points your AI will use 
-                  to convince hesitant prospects and stand out from competitors.
-                </p>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+                🤖
+              </div>
+              <div className="space-y-3 flex-1">
+                <h2 className="text-2xl font-bold text-white">
+                  What makes {data.companyName} special?
+                </h2>
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+                  <p className="text-amber-200/80 text-sm">
+                    <span className="font-medium text-amber-400">💡</span> These are the selling points your AI will use to convince hesitant prospects.
+                  </p>
+                </div>
               </div>
             </div>
             
-            {/* Selected */}
-            {data.differentials.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {data.differentials.map((diff, i) => (
-                  <span
-                    key={i}
-                    className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-full text-sm flex items-center gap-2"
-                  >
-                    ⭐ {diff}
-                    <button
-                      onClick={() => updateData('differentials', data.differentials.filter((_, idx) => idx !== i))}
-                      className="hover:text-red-400 transition-colors"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            
-            {/* Suggestions */}
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400 font-medium">
-                💬 SUGGESTIONS <span className="text-gray-500">— click to add</span>
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {diffSuggestions
-                  .filter(d => !data.differentials.includes(d))
-                  .map((diff, i) => (
-                    <button
+            <div className="ml-16 space-y-4">
+              {/* Selected */}
+              {data.differentials.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {data.differentials.map((diff, i) => (
+                    <span
                       key={i}
-                      onClick={() => updateData('differentials', [...data.differentials, diff])}
-                      className="px-4 py-2 bg-gray-800/80 hover:bg-gray-700 border border-gray-700 rounded-full text-sm transition-colors"
+                      className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-full text-sm flex items-center gap-2"
                     >
-                      + {diff}
-                    </button>
+                      ⭐ {diff}
+                      <button
+                        onClick={() => updateData('differentials', data.differentials.filter((_, idx) => idx !== i))}
+                        className="hover:text-red-400 transition-colors"
+                      >
+                        ×
+                      </button>
+                    </span>
                   ))}
+                </div>
+              )}
+              
+              {/* Suggestions */}
+              {suggestions.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-400">💬 Suggestions:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestions
+                      .filter(d => !data.differentials.includes(d))
+                      .map((diff, i) => (
+                        <button
+                          key={i}
+                          onClick={() => updateData('differentials', [...data.differentials, diff])}
+                          className="px-4 py-2 bg-gray-800/80 hover:bg-gray-700 border border-gray-700 rounded-full text-sm transition-colors"
+                        >
+                          + {diff}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Custom input */}
+              <div className="space-y-2">
+                <p className="text-sm text-gray-400">✍️ Or add your own:</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={tempInput}
+                    onChange={(e) => setTempInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && tempInput.trim()) {
+                        updateData('differentials', [...data.differentials, tempInput.trim()]);
+                        setTempInput('');
+                      }
+                    }}
+                    placeholder="What makes you different..."
+                    className="flex-1 bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none transition-all duration-300 placeholder:text-gray-500"
+                  />
+                  <button
+                    onClick={() => {
+                      if (tempInput.trim()) {
+                        updateData('differentials', [...data.differentials, tempInput.trim()]);
+                        setTempInput('');
+                      }
+                    }}
+                    disabled={!tempInput.trim()}
+                    className="px-5 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-xl transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
               </div>
-            </div>
-            
-            {/* Custom input */}
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400 font-medium">
-                ✍️ OR ADD YOUR OWN
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={tempInput}
-                  onChange={(e) => setTempInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && tempInput.trim()) {
-                      updateData('differentials', [...data.differentials, tempInput.trim()]);
-                      setTempInput('');
-                    }
-                  }}
-                  placeholder="What makes you different..."
-                  className="flex-1 bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none transition-all duration-300 placeholder:text-gray-500"
-                />
+              
+              <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    if (tempInput.trim()) {
-                      updateData('differentials', [...data.differentials, tempInput.trim()]);
-                      setTempInput('');
-                    }
-                  }}
-                  disabled={!tempInput.trim()}
-                  className="px-5 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-xl transition-colors"
+                  onClick={goToPrev}
+                  className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
                 >
-                  Add
+                  ← Back
+                </button>
+                <button
+                  onClick={goToNext}
+                  disabled={!canProceed()}
+                  className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
+                >
+                  Continue →
                 </button>
               </div>
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={goToPrev}
-                className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={goToNext}
-                disabled={!canProceed()}
-                className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
-              >
-                Continue →
-              </button>
             </div>
           </div>
         );
@@ -885,169 +838,177 @@ ${data.objections.map(o => `If they say "${o.objection}":
       case 'team':
         return (
           <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-white">
-                Who can be mentioned in calls?
-              </h2>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                <p className="text-amber-200/80 text-sm">
-                  <span className="font-medium text-amber-400">💡 Why this matters:</span> Add names and roles of people your AI can mention during conversations. 
-                  For example, if a customer asks <em>"Who would do my installation?"</em> or <em>"Can I speak to a manager?"</em>, 
-                  your AI can reference these team members by name.
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+                🤖
+              </div>
+              <div className="space-y-3 flex-1">
+                <h2 className="text-2xl font-bold text-white">
+                  Who can be mentioned in calls?
+                </h2>
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+                  <p className="text-amber-200/80 text-sm">
+                    <span className="font-medium text-amber-400">💡</span> Add names and roles of people your AI can mention. 
+                    For example, if a customer asks <em>"Who would do my installation?"</em> or <em>"Can I speak to a manager?"</em>
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="ml-16 space-y-4">
+              <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-4">
+                <p className="text-gray-400 text-sm">
+                  <span className="text-gray-300">Examples:</span> "John, senior technician" • "Sarah, sales manager" • "Mike, owner"
+                </p>
+                <p className="text-gray-500 text-sm mt-2">
+                  You can leave this empty if you prefer the AI not to mention specific people.
                 </p>
               </div>
-            </div>
-            
-            <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-4">
-              <p className="text-gray-400 text-sm">
-                <span className="text-gray-300 font-medium">Examples:</span> "John, our senior technician" • "Sarah, sales manager" • "Mike, the owner"
-              </p>
-              <p className="text-gray-500 text-sm mt-2">
-                You can leave this empty if you prefer the AI not to mention specific people.
-              </p>
-            </div>
-            
-            {/* Team members */}
-            {data.team.length > 0 && (
-              <div className="space-y-2">
-                {data.team.map((member, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between p-4 bg-gray-800/80 border border-gray-700 rounded-xl"
-                  >
-                    <span>
-                      <span className="text-lg mr-2">👤</span>
-                      <strong>{member.name}</strong>
-                      <span className="text-gray-400"> — {member.role}</span>
-                    </span>
-                    <button
-                      onClick={() => updateData('team', data.team.filter((_, idx) => idx !== i))}
-                      className="text-gray-400 hover:text-red-400 transition-colors"
+              
+              {/* Team members */}
+              {data.team.length > 0 && (
+                <div className="space-y-2">
+                  {data.team.map((member, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between p-4 bg-gray-800/80 border border-gray-700 rounded-xl"
                     >
-                      ×
-                    </button>
-                  </div>
-                ))}
+                      <span>
+                        <span className="text-lg mr-2">👤</span>
+                        <strong>{member.name}</strong>
+                        <span className="text-gray-400"> — {member.role}</span>
+                      </span>
+                      <button
+                        onClick={() => updateData('team', data.team.filter((_, idx) => idx !== i))}
+                        className="text-gray-400 hover:text-red-400 transition-colors"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Add form */}
+              <div className="p-4 bg-gray-800/50 border border-gray-700 rounded-xl space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={tempTeamMember.name}
+                    onChange={(e) => setTempTeamMember(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Name"
+                    className="bg-gray-800 border border-gray-600 focus:border-violet-500 rounded-lg px-4 py-3 outline-none transition-colors"
+                  />
+                  <input
+                    type="text"
+                    value={tempTeamMember.role}
+                    onChange={(e) => setTempTeamMember(prev => ({ ...prev, role: e.target.value }))}
+                    placeholder="Role"
+                    className="bg-gray-800 border border-gray-600 focus:border-violet-500 rounded-lg px-4 py-3 outline-none transition-colors"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    if (tempTeamMember.name && tempTeamMember.role) {
+                      updateData('team', [...data.team, tempTeamMember]);
+                      setTempTeamMember({ name: '', role: '' });
+                    }
+                  }}
+                  disabled={!tempTeamMember.name || !tempTeamMember.role}
+                  className="w-full py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg transition-colors"
+                >
+                  + Add Team Member
+                </button>
               </div>
-            )}
-            
-            {/* Add form */}
-            <div className="p-4 bg-gray-800/50 border border-gray-700 rounded-xl space-y-3">
-              <p className="text-sm text-gray-400 font-medium">Add a team member</p>
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  value={tempTeamMember.name}
-                  onChange={(e) => setTempTeamMember(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Name (e.g., John)"
-                  className="bg-gray-800 border border-gray-600 focus:border-violet-500 rounded-lg px-4 py-3 outline-none transition-colors"
-                />
-                <input
-                  type="text"
-                  value={tempTeamMember.role}
-                  onChange={(e) => setTempTeamMember(prev => ({ ...prev, role: e.target.value }))}
-                  placeholder="Role (e.g., Sales Manager)"
-                  className="bg-gray-800 border border-gray-600 focus:border-violet-500 rounded-lg px-4 py-3 outline-none transition-colors"
-                />
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={goToPrev}
+                  className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={goToNext}
+                  className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-xl font-semibold transition-all duration-300"
+                >
+                  {data.team.length > 0 ? 'Continue →' : 'Skip for now →'}
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  if (tempTeamMember.name && tempTeamMember.role) {
-                    updateData('team', [...data.team, tempTeamMember]);
-                    setTempTeamMember({ name: '', role: '' });
-                  }
-                }}
-                disabled={!tempTeamMember.name || !tempTeamMember.role}
-                className="w-full py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg transition-colors"
-              >
-                + Add Team Member
-              </button>
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={goToPrev}
-                className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={goToNext}
-                className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-xl font-semibold transition-all duration-300"
-              >
-                {data.team.length > 0 ? 'Continue →' : 'Skip for now →'}
-              </button>
             </div>
           </div>
         );
         
       // ==================== OBJECTIVE ====================
       case 'objective':
-        const objectiveSuggestions = generateSuggestions('objective', data);
         return (
           <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-white">
-                What should your AI accomplish?
-              </h2>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                <p className="text-amber-200/80 text-sm">
-                  <span className="font-medium text-amber-400">💡 Why this matters:</span> This is the #1 goal of every call. 
-                  Your AI will steer conversations towards achieving this objective.
-                </p>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+                🤖
+              </div>
+              <div className="space-y-3 flex-1">
+                <h2 className="text-2xl font-bold text-white">
+                  What should your AI accomplish on calls?
+                </h2>
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+                  <p className="text-amber-200/80 text-sm">
+                    <span className="font-medium text-amber-400">💡</span> This is the #1 goal of every call. 
+                    Your AI will steer conversations towards achieving this objective.
+                  </p>
+                </div>
               </div>
             </div>
             
-            {/* Suggestions */}
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400 font-medium">
-                💬 SUGGESTIONS <span className="text-gray-500">— click to use, or write your own</span>
-              </p>
+            <div className="ml-16 space-y-4">
+              {/* Suggestions */}
               <div className="space-y-2">
-                {objectiveSuggestions.map((suggestion, i) => (
-                  <button
-                    key={i}
-                    onClick={() => updateData('objective', suggestion)}
-                    className={`w-full p-4 rounded-xl border-2 text-left transition-all duration-300 ${
-                      data.objective === suggestion
-                        ? 'border-violet-500 bg-violet-500/20'
-                        : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'
-                    }`}
-                  >
-                    <p className="text-gray-300 text-sm leading-relaxed">{suggestion}</p>
-                  </button>
-                ))}
+                <p className="text-sm text-gray-400">💬 Common objectives:</p>
+                <div className="space-y-2">
+                  {suggestions.map((suggestion, i) => (
+                    <button
+                      key={i}
+                      onClick={() => updateData('objective', suggestion)}
+                      className={`w-full p-4 rounded-xl border-2 text-left transition-all duration-300 ${
+                        data.objective === suggestion
+                          ? 'border-violet-500 bg-violet-500/20'
+                          : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'
+                      }`}
+                    >
+                      <p className="text-gray-300 text-sm">{suggestion}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            
-            {/* Custom input */}
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400 font-medium">
-                ✍️ OR WRITE YOUR OWN
-              </p>
-              <textarea
-                value={data.objective}
-                onChange={(e) => updateData('objective', e.target.value)}
-                placeholder="Describe what your AI should achieve on each call..."
-                rows={3}
-                className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-5 py-4 outline-none transition-all duration-300 placeholder:text-gray-500 resize-none"
-              />
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={goToPrev}
-                className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={goToNext}
-                disabled={!canProceed()}
-                className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
-              >
-                Continue →
-              </button>
+              
+              {/* Custom */}
+              <div className="space-y-2">
+                <p className="text-sm text-gray-400">✍️ Or write your own:</p>
+                <textarea
+                  value={data.objective}
+                  onChange={(e) => updateData('objective', e.target.value)}
+                  placeholder="Describe what your AI should achieve..."
+                  rows={3}
+                  className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-5 py-4 outline-none transition-all duration-300 placeholder:text-gray-500 resize-none"
+                />
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={goToPrev}
+                  className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={goToNext}
+                  disabled={!canProceed()}
+                  className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
+                >
+                  Continue →
+                </button>
+              </div>
             </div>
           </div>
         );
@@ -1056,165 +1017,170 @@ ${data.objections.map(o => `If they say "${o.objection}":
       case 'personality':
         return (
           <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-white">
-                Give your AI a personality
-              </h2>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                <p className="text-amber-200/80 text-sm">
-                  <span className="font-medium text-amber-400">💡 Why this matters:</span> The tone and name give your AI a consistent 
-                  personality that customers will recognize and trust.
-                </p>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+                🤖
+              </div>
+              <div className="space-y-3 flex-1">
+                <h2 className="text-2xl font-bold text-white">
+                  Give your AI a personality
+                </h2>
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+                  <p className="text-amber-200/80 text-sm">
+                    <span className="font-medium text-amber-400">💡</span> The tone and name give your AI a consistent personality 
+                    that customers will recognize and trust.
+                  </p>
+                </div>
               </div>
             </div>
             
-            {/* Tone */}
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400 font-medium">Communication Style</p>
-              <div className="grid grid-cols-3 gap-3">
-                {TONES.map(tone => (
-                  <button
-                    key={tone.id}
-                    onClick={() => updateData('tone', tone.id)}
-                    className={`p-4 rounded-xl border-2 transition-all duration-300 ${
-                      data.tone === tone.id
-                        ? 'border-violet-500 bg-violet-500/20'
-                        : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'
-                    }`}
-                  >
-                    <span className="text-2xl">{tone.icon}</span>
-                    <span className="block mt-2 font-medium">{tone.label}</span>
-                    <span className="block text-xs text-gray-400 mt-1">{tone.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            {/* Name */}
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400 font-medium">
-                💬 SUGGESTED NAMES <span className="text-gray-500">— click to use, or write your own</span>
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {SUGGESTED_NAMES.map(name => (
-                  <button
-                    key={name}
-                    onClick={() => updateData('assistantName', name)}
-                    className={`px-5 py-2 rounded-full border-2 transition-all duration-300 ${
-                      data.assistantName === name
-                        ? 'border-violet-500 bg-violet-500/20'
-                        : 'border-gray-700 hover:border-gray-600'
-                    }`}
-                  >
-                    {name}
-                  </button>
-                ))}
+            <div className="ml-16 space-y-6">
+              {/* Tone */}
+              <div className="space-y-3">
+                <p className="text-sm text-gray-400 font-medium">How should your AI communicate?</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {TONES.map(tone => (
+                    <button
+                      key={tone.id}
+                      onClick={() => updateData('tone', tone.id)}
+                      className={`p-4 rounded-xl border-2 transition-all duration-300 ${
+                        data.tone === tone.id
+                          ? 'border-violet-500 bg-violet-500/20'
+                          : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'
+                      }`}
+                    >
+                      <span className="text-2xl">{tone.icon}</span>
+                      <span className="block mt-2 font-medium text-sm">{tone.label}</span>
+                      <span className="block text-xs text-gray-400 mt-1">{tone.desc}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
               
-              <div className="pt-2">
-                <p className="text-sm text-gray-400 font-medium mb-2">✍️ OR WRITE YOUR OWN</p>
+              {/* Name */}
+              <div className="space-y-3">
+                <p className="text-sm text-gray-400 font-medium">What should we call your AI?</p>
+                <div className="flex flex-wrap gap-2">
+                  {SUGGESTED_NAMES.map(name => (
+                    <button
+                      key={name}
+                      onClick={() => updateData('assistantName', name)}
+                      className={`px-5 py-2 rounded-full border-2 transition-all duration-300 ${
+                        data.assistantName === name
+                          ? 'border-violet-500 bg-violet-500/20'
+                          : 'border-gray-700 hover:border-gray-600'
+                      }`}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
                 <input
                   type="text"
                   value={data.assistantName}
                   onChange={(e) => updateData('assistantName', e.target.value)}
-                  placeholder="Custom name..."
+                  placeholder="Or type a custom name..."
                   className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none transition-all duration-300 placeholder:text-gray-500"
                 />
               </div>
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={goToPrev}
-                className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={goToNext}
-                disabled={!canProceed()}
-                className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
-              >
-                Continue →
-              </button>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={goToPrev}
+                  className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={goToNext}
+                  disabled={!canProceed()}
+                  className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
+                >
+                  Continue →
+                </button>
+              </div>
             </div>
           </div>
         );
         
       // ==================== OBJECTIONS ====================
       case 'objections':
-        const objectionSuggestions = generateSuggestions('objections', data);
         return (
           <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-white">
-                How should {data.assistantName || 'your AI'} handle objections?
-              </h2>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                <p className="text-amber-200/80 text-sm">
-                  <span className="font-medium text-amber-400">💡 Why this matters:</span> Pre-programmed responses help your AI 
-                  handle common pushbacks smoothly. <span className="text-gray-400">(This step is optional)</span>
-                </p>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+                🤖
+              </div>
+              <div className="space-y-3 flex-1">
+                <h2 className="text-2xl font-bold text-white">
+                  How should {data.assistantName || 'your AI'} handle objections?
+                </h2>
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+                  <p className="text-amber-200/80 text-sm">
+                    <span className="font-medium text-amber-400">💡</span> Pre-programmed responses help your AI handle common pushbacks smoothly.
+                    <span className="text-gray-400"> (Optional)</span>
+                  </p>
+                </div>
               </div>
             </div>
             
-            {/* Added objections */}
-            {data.objections.length > 0 && (
-              <div className="space-y-2">
-                {data.objections.map((obj, i) => (
-                  <div key={i} className="p-4 bg-gray-800/80 border border-gray-700 rounded-xl">
-                    <div className="flex justify-between items-start">
-                      <div className="space-y-1">
-                        <p className="text-red-400 text-sm">❌ "{obj.objection}"</p>
-                        <p className="text-green-400 text-sm">✓ "{obj.response}"</p>
+            <div className="ml-16 space-y-4">
+              {/* Added */}
+              {data.objections.length > 0 && (
+                <div className="space-y-2">
+                  {data.objections.map((obj, i) => (
+                    <div key={i} className="p-4 bg-gray-800/80 border border-gray-700 rounded-xl">
+                      <div className="flex justify-between items-start">
+                        <div className="space-y-1">
+                          <p className="text-red-400 text-sm">❌ "{obj.objection}"</p>
+                          <p className="text-green-400 text-sm">✓ "{obj.response}"</p>
+                        </div>
+                        <button
+                          onClick={() => updateData('objections', data.objections.filter((_, idx) => idx !== i))}
+                          className="text-gray-400 hover:text-red-400 transition-colors ml-2"
+                        >
+                          ×
+                        </button>
                       </div>
-                      <button
-                        onClick={() => updateData('objections', data.objections.filter((_, idx) => idx !== i))}
-                        className="text-gray-400 hover:text-red-400 transition-colors ml-2"
-                      >
-                        ×
-                      </button>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            
-            {/* Suggestions */}
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400 font-medium">
-                💬 COMMON OBJECTIONS <span className="text-gray-500">— click to add</span>
-              </p>
-              <div className="space-y-2">
-                {objectionSuggestions
-                  .filter(o => !data.objections.find(existing => existing.objection === o.objection))
-                  .slice(0, 3)
-                  .map((obj, i) => (
-                    <button
-                      key={i}
-                      onClick={() => updateData('objections', [...data.objections, obj])}
-                      className="w-full p-4 bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 rounded-xl text-left transition-colors"
-                    >
-                      <p className="text-sm text-gray-300">+ Add: "{obj.objection}"</p>
-                      <p className="text-xs text-gray-500 mt-1">Response: "{obj.response.substring(0, 50)}..."</p>
-                    </button>
                   ))}
+                </div>
+              )}
+              
+              {/* Suggestions */}
+              <div className="space-y-2">
+                <p className="text-sm text-gray-400">💬 Common objections:</p>
+                <div className="space-y-2">
+                  {suggestions
+                    .filter(o => !data.objections.find(existing => existing.objection === o.objection))
+                    .slice(0, 3)
+                    .map((obj, i) => (
+                      <button
+                        key={i}
+                        onClick={() => updateData('objections', [...data.objections, obj])}
+                        className="w-full p-4 bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 rounded-xl text-left transition-colors"
+                      >
+                        <p className="text-sm text-gray-300">+ "{obj.objection}"</p>
+                        <p className="text-xs text-gray-500 mt-1">→ {obj.response.substring(0, 60)}...</p>
+                      </button>
+                    ))}
+                </div>
               </div>
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={goToPrev}
-                className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={goToNext}
-                className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-xl font-semibold transition-all duration-300"
-              >
-                {data.objections.length > 0 ? 'Continue →' : 'Skip for now →'}
-              </button>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={goToPrev}
+                  className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={goToNext}
+                  className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-xl font-semibold transition-all duration-300"
+                >
+                  {data.objections.length > 0 ? 'Continue →' : 'Skip for now →'}
+                </button>
+              </div>
             </div>
           </div>
         );
@@ -1223,107 +1189,68 @@ ${data.objections.map(o => `If they say "${o.objection}":
       case 'languages':
         return (
           <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-white">
-                What languages should {data.assistantName || 'your AI'} speak?
-              </h2>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                <p className="text-amber-200/80 text-sm">
-                  <span className="font-medium text-amber-400">💡 Why this matters:</span> Your AI will automatically adapt to speak 
-                  the language configured for each lead.
-                </p>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+                🤖
+              </div>
+              <div className="space-y-3 flex-1">
+                <h2 className="text-2xl font-bold text-white">
+                  Last step! What languages should {data.assistantName || 'your AI'} speak?
+                </h2>
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+                  <p className="text-amber-200/80 text-sm">
+                    <span className="font-medium text-amber-400">💡</span> Your AI will automatically adapt to speak 
+                    the language configured for each lead.
+                  </p>
+                </div>
               </div>
             </div>
             
-            <div className="grid grid-cols-3 gap-4">
-              {LANGUAGES.map(lang => (
-                <button
-                  key={lang.id}
-                  onClick={() => {
-                    const current = data.languages;
-                    if (current.includes(lang.id)) {
-                      if (current.length > 1) {
-                        updateData('languages', current.filter(l => l !== lang.id));
+            <div className="ml-16 space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                {LANGUAGES.map(lang => (
+                  <button
+                    key={lang.id}
+                    onClick={() => {
+                      const current = data.languages;
+                      if (current.includes(lang.id)) {
+                        if (current.length > 1) {
+                          updateData('languages', current.filter(l => l !== lang.id));
+                        }
+                      } else {
+                        updateData('languages', [...current, lang.id]);
                       }
-                    } else {
-                      updateData('languages', [...current, lang.id]);
-                    }
-                  }}
-                  className={`p-6 rounded-xl border-2 transition-all duration-300 ${
-                    data.languages.includes(lang.id)
-                      ? 'border-violet-500 bg-violet-500/20'
-                      : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'
-                  }`}
-                >
-                  <span className="text-4xl">{lang.flag}</span>
-                  <span className="block mt-3 font-medium">{lang.label}</span>
-                  {data.languages.includes(lang.id) && (
-                    <span className="block text-green-400 text-sm mt-1">✓ Selected</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={goToPrev}
-                className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={goToNext}
-                disabled={data.languages.length === 0}
-                className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
-              >
-                Continue →
-              </button>
-            </div>
-          </div>
-        );
-        
-      // ==================== REVIEW ====================
-      case 'review':
-        return (
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-white">
-                Your AI is ready! 🎉
-              </h2>
-              <p className="text-gray-400">
-                Review your prompt on the right, then click below to create your assistant.
-              </p>
-            </div>
-            
-            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-6 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center text-xl">
-                  🤖
-                </div>
-                <div>
-                  <p className="font-bold text-lg">{data.assistantName || 'Julia'}</p>
-                  <p className="text-sm text-gray-400">AI Assistant for {data.companyName}</p>
-                </div>
+                    }}
+                    className={`p-6 rounded-xl border-2 transition-all duration-300 ${
+                      data.languages.includes(lang.id)
+                        ? 'border-violet-500 bg-violet-500/20'
+                        : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'
+                    }`}
+                  >
+                    <span className="text-4xl">{lang.flag}</span>
+                    <span className="block mt-3 font-medium">{lang.label}</span>
+                    {data.languages.includes(lang.id) && (
+                      <span className="block text-green-400 text-sm mt-1">✓ Selected</span>
+                    )}
+                  </button>
+                ))}
               </div>
-              <p className="text-sm text-gray-300">
-                {data.assistantName || 'Your AI'} is configured to help with {data.objective?.substring(0, 100)}...
-              </p>
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={goToPrev}
-                className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="flex-1 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-semibold transition-all duration-300 shadow-lg shadow-green-500/25"
-              >
-                {isSaving ? '⏳ Creating...' : '✅ Create My Assistant'}
-              </button>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={goToPrev}
+                  className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={goToNext}
+                  disabled={data.languages.length === 0}
+                  className="flex-1 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300 shadow-lg shadow-green-500/25"
+                >
+                  Build My AI Assistant →
+                </button>
+              </div>
             </div>
           </div>
         );
@@ -1334,135 +1261,347 @@ ${data.objections.map(o => `If they say "${o.objection}":
   };
 
   // ============================================================================
+  // RENDER - BUILDING PHASE
+  // ============================================================================
+  
+  const renderBuilding = () => (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center max-w-md mx-auto px-6">
+        <div className="w-24 h-24 bg-gradient-to-br from-violet-500 to-purple-600 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-8 animate-pulse">
+          🤖
+        </div>
+        
+        <h2 className="text-2xl font-bold text-white mb-2">Building your AI assistant...</h2>
+        <p className="text-gray-400 mb-8">{buildStage}</p>
+        
+        <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden mb-4">
+          <div 
+            className="h-full bg-gradient-to-r from-violet-500 to-purple-500 transition-all duration-500 ease-out"
+            style={{ width: `${buildProgress}%` }}
+          />
+        </div>
+        
+        <p className="text-sm text-gray-500">{buildProgress}% complete</p>
+      </div>
+    </div>
+  );
+
+  // ============================================================================
+  // RENDER - REVIEW PHASE
+  // ============================================================================
+  
+  const renderReview = () => {
+    const sections = [
+      { id: 'companyName', icon: '🏢', title: 'Company', value: data.companyName },
+      { id: 'about', icon: '📝', title: 'About', value: data.about.length > 100 ? data.about.substring(0, 100) + '...' : data.about },
+      { id: 'products', icon: '📦', title: 'Products & Services', value: data.products.join(', ') },
+      { id: 'differentials', icon: '⭐', title: 'Differentials', value: data.differentials.join(', ') },
+      { id: 'team', icon: '👥', title: 'Team', value: data.team.length > 0 ? data.team.map(t => `${t.name} (${t.role})`).join(', ') : 'Not specified' },
+      { id: 'objective', icon: '🎯', title: 'Objective', value: data.objective.length > 100 ? data.objective.substring(0, 100) + '...' : data.objective },
+      { id: 'personality', icon: '🎭', title: 'Personality', value: `${data.assistantName} • ${TONES.find(t => t.id === data.tone)?.label || 'Friendly'}` },
+      { id: 'objections', icon: '💬', title: 'Objections', value: data.objections.length > 0 ? `${data.objections.length} configured` : 'Not specified' },
+      { id: 'languages', icon: '🌐', title: 'Languages', value: data.languages.map(l => LANGUAGES.find(lang => lang.id === l)?.flag).join(' ') }
+    ];
+    
+    return (
+      <div className="max-w-2xl mx-auto px-6 py-12">
+        <div className="text-center mb-10">
+          <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6">
+            ✅
+          </div>
+          <h2 className="text-3xl font-bold text-white mb-2">Your AI is ready!</h2>
+          <p className="text-gray-400">Review the configuration below. Click any section to make changes.</p>
+        </div>
+        
+        {/* Assistant Preview */}
+        <div className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/20 rounded-2xl p-6 mb-8">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-2xl">
+              🤖
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-white">{data.assistantName}</h3>
+              <p className="text-gray-400">AI Assistant for {data.companyName}</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Sections */}
+        <div className="space-y-3 mb-8">
+          {sections.map(section => (
+            <button
+              key={section.id}
+              onClick={() => startReformulate(section.id)}
+              className="w-full p-4 bg-gray-800/50 hover:bg-gray-800 border border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all duration-300 group"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-3 min-w-0">
+                  <span className="text-xl">{section.icon}</span>
+                  <div className="min-w-0">
+                    <p className="font-medium text-white text-sm">{section.title}</p>
+                    <p className="text-gray-400 text-sm mt-1 truncate">{section.value}</p>
+                  </div>
+                </div>
+                <span className="text-gray-500 group-hover:text-violet-400 transition-colors text-sm flex-shrink-0 ml-4">
+                  ✏️ Edit
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+        
+        {/* Actions */}
+        <div className="flex gap-4">
+          <button
+            onClick={() => startReformulate(null)}
+            className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
+          >
+            🔄 Reformulate All
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex-1 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-semibold transition-all duration-300 shadow-lg shadow-green-500/25"
+          >
+            {isSaving ? '⏳ Saving...' : '✅ Start Using My AI'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================================
+  // RENDER - REFORMULATE PHASE
+  // ============================================================================
+  
+  const renderReformulate = () => {
+    // Se reformulateStep for null, significa "reformular tudo" - volta ao início
+    if (reformulateStep === null) {
+      setPhase('chat');
+      setCurrentStep(0);
+      return null;
+    }
+    
+    const stepIndex = STEPS.findIndex(s => s.id === reformulateStep);
+    const step = STEPS[stepIndex];
+    
+    const getCurrentValue = () => {
+      switch (reformulateStep) {
+        case 'companyName': return data.companyName;
+        case 'about': return data.about;
+        case 'products': return data.products.join(', ');
+        case 'differentials': return data.differentials.join(', ');
+        case 'team': return data.team.map(t => `${t.name} (${t.role})`).join(', ');
+        case 'objective': return data.objective;
+        case 'personality': return `${data.assistantName} • ${TONES.find(t => t.id === data.tone)?.label}`;
+        case 'objections': return data.objections.map(o => o.objection).join(', ');
+        case 'languages': return data.languages.map(l => LANGUAGES.find(lang => lang.id === l)?.label).join(', ');
+        default: return '';
+      }
+    };
+    
+    return (
+      <div className="max-w-2xl mx-auto px-6 py-12">
+        <button
+          onClick={cancelReformulate}
+          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8"
+        >
+          ← Back to Review
+        </button>
+        
+        <div className="bg-gray-900/50 backdrop-blur border border-gray-800/50 rounded-2xl p-8">
+          <div className="flex items-start gap-4 mb-6">
+            <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+              🤖
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold text-white">
+                Let's update: {step?.title}
+              </h2>
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                <p className="text-sm text-gray-400">Current value:</p>
+                <p className="text-gray-300 text-sm mt-1">{getCurrentValue() || 'Not set'}</p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Re-render the step content */}
+          <div className="ml-16">
+            {/* Simple edit - just set the step and use existing chat content */}
+            {(() => {
+              // Temporarily set current step to render the right content
+              const originalStep = currentStep;
+              // This is a bit hacky but allows us to reuse the chat content
+              return (
+                <div className="space-y-4">
+                  <p className="text-gray-400">Make your changes below:</p>
+                  
+                  {/* Simplified edit based on type */}
+                  {['companyName'].includes(reformulateStep) && (
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={data.companyName}
+                      onChange={(e) => updateData('companyName', e.target.value)}
+                      className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-5 py-4 text-lg outline-none transition-all duration-300"
+                    />
+                  )}
+                  
+                  {['about', 'objective'].includes(reformulateStep) && (
+                    <textarea
+                      ref={inputRef}
+                      value={data[reformulateStep]}
+                      onChange={(e) => updateData(reformulateStep, e.target.value)}
+                      rows={5}
+                      className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-5 py-4 outline-none transition-all duration-300 resize-none"
+                    />
+                  )}
+                  
+                  {['products', 'differentials'].includes(reformulateStep) && (
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap gap-2">
+                        {data[reformulateStep].map((item, i) => (
+                          <span key={i} className="px-3 py-1 bg-violet-500/20 border border-violet-500/50 rounded-full text-sm flex items-center gap-2">
+                            {item}
+                            <button onClick={() => updateData(reformulateStep, data[reformulateStep].filter((_, idx) => idx !== i))} className="hover:text-red-400">×</button>
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          ref={inputRef}
+                          type="text"
+                          value={tempInput}
+                          onChange={(e) => setTempInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && tempInput.trim()) {
+                              updateData(reformulateStep, [...data[reformulateStep], tempInput.trim()]);
+                              setTempInput('');
+                            }
+                          }}
+                          placeholder="Add new..."
+                          className="flex-1 bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none"
+                        />
+                        <button
+                          onClick={() => {
+                            if (tempInput.trim()) {
+                              updateData(reformulateStep, [...data[reformulateStep], tempInput.trim()]);
+                              setTempInput('');
+                            }
+                          }}
+                          className="px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {reformulateStep === 'personality' && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-3">
+                        {TONES.map(tone => (
+                          <button
+                            key={tone.id}
+                            onClick={() => updateData('tone', tone.id)}
+                            className={`p-3 rounded-xl border-2 ${data.tone === tone.id ? 'border-violet-500 bg-violet-500/20' : 'border-gray-700'}`}
+                          >
+                            <span className="text-xl">{tone.icon}</span>
+                            <span className="block text-sm mt-1">{tone.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        type="text"
+                        value={data.assistantName}
+                        onChange={(e) => updateData('assistantName', e.target.value)}
+                        placeholder="Assistant name"
+                        className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none"
+                      />
+                    </div>
+                  )}
+                  
+                  {reformulateStep === 'languages' && (
+                    <div className="grid grid-cols-3 gap-3">
+                      {LANGUAGES.map(lang => (
+                        <button
+                          key={lang.id}
+                          onClick={() => {
+                            const current = data.languages;
+                            if (current.includes(lang.id)) {
+                              if (current.length > 1) updateData('languages', current.filter(l => l !== lang.id));
+                            } else {
+                              updateData('languages', [...current, lang.id]);
+                            }
+                          }}
+                          className={`p-4 rounded-xl border-2 ${data.languages.includes(lang.id) ? 'border-violet-500 bg-violet-500/20' : 'border-gray-700'}`}
+                        >
+                          <span className="text-2xl">{lang.flag}</span>
+                          <span className="block text-sm mt-2">{lang.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={cancelReformulate}
+                    className="w-full py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-xl font-semibold transition-all duration-300"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================================
   // RENDER - MAIN
   // ============================================================================
   
-  const progress = ((currentStep) / (STEPS.length - 1)) * 100;
-
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
-      {/* Background gradient */}
+      {/* Background */}
       <div className="fixed inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-purple-500/5 pointer-events-none" />
       
-      {/* Header */}
-      <header className="relative z-10 border-b border-gray-800/50 bg-[#0a0a0f]/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center font-bold">
-              AI
-            </div>
-            <div>
-              <h1 className="font-semibold">
-                {mode === 'new_prompt' ? 'Create New Prompt' : 'Setup Assistant'}
-              </h1>
-              <p className="text-xs text-gray-500">Step {currentStep + 1} of {STEPS.length}</p>
-            </div>
-          </div>
-          
-          {/* Progress bar */}
-          <div className="flex items-center gap-4">
-            <div className="w-48 h-2 bg-gray-800 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-violet-500 to-purple-500 transition-all duration-500"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <span className="text-sm text-gray-400">{Math.round(progress)}%</span>
-          </div>
-        </div>
-      </header>
-      
-      {/* Main content */}
-      <main className="relative z-10 max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          
-          {/* Left - Question */}
-          <div className="lg:sticky lg:top-8 lg:self-start">
-            <div className="bg-gray-900/50 backdrop-blur border border-gray-800/50 rounded-2xl p-8">
-              {renderQuestionContent()}
-            </div>
-          </div>
-          
-          {/* Right - Prompt Preview */}
-          <div>
-            <div className="bg-gray-900/50 backdrop-blur border border-gray-800/50 rounded-2xl p-6">
-              <h3 className="text-lg font-semibold text-gray-300 mb-6 flex items-center gap-2">
-                <span>📄</span> Your Prompt
-              </h3>
-              
-              <div className="space-y-3">
-                {STEPS.filter(s => s.field).map((step, index) => {
-                  const actualIndex = STEPS.findIndex(s => s.id === step.id);
-                  const isComplete = isStepComplete(actualIndex);
-                  const isCurrent = actualIndex === currentStep;
-                  const isPending = actualIndex > currentStep;
-                  const value = getFieldDisplayValue(step.field);
-                  
-                  return (
-                    <button
-                      key={step.id}
-                      onClick={() => !isPending && startEditing(actualIndex)}
-                      disabled={isPending}
-                      className={`w-full p-4 rounded-xl border-2 text-left transition-all duration-300 ${
-                        isCurrent
-                          ? 'border-violet-500 bg-violet-500/10'
-                          : isComplete
-                            ? 'border-gray-700 hover:border-gray-600 bg-gray-800/30 cursor-pointer'
-                            : 'border-gray-800 bg-gray-900/50 opacity-50 cursor-not-allowed'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="text-xl flex-shrink-0">{step.icon}</span>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{step.title}</span>
-                              {isComplete && !isCurrent && (
-                                <span className="text-green-400 text-xs">✓</span>
-                              )}
-                              {isCurrent && (
-                                <span className="text-violet-400 text-xs">● Current</span>
-                              )}
-                              {isPending && (
-                                <span className="text-gray-600 text-xs">🔒</span>
-                              )}
-                            </div>
-                            {value ? (
-                              <p className="text-sm text-gray-400 mt-1 truncate">{value}</p>
-                            ) : (
-                              <p className="text-sm text-gray-600 mt-1">{isPending ? 'Pending' : 'Not set'}</p>
-                            )}
-                          </div>
-                        </div>
-                        {isComplete && !isCurrent && (
-                          <span className="text-gray-500 text-xs flex-shrink-0">✏️</span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-              
-              {/* Assistant preview */}
-              {data.assistantName && (
-                <div className="mt-6 p-4 bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/20 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center text-xl">
-                      🤖
-                    </div>
-                    <div>
-                      <p className="font-bold">{data.assistantName}</p>
-                      <p className="text-sm text-gray-400">
-                        {data.companyName ? `AI for ${data.companyName}` : 'Your AI Assistant'}
-                      </p>
-                    </div>
+      {/* Content based on phase */}
+      {phase === 'chat' && (
+        <>
+          {/* Header */}
+          <header className="relative z-10 border-b border-gray-800/50 bg-[#0a0a0f]/80 backdrop-blur-xl">
+            <div className="max-w-3xl mx-auto px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center font-bold text-sm">
+                    AI
                   </div>
+                  <span className="font-semibold">Setup Assistant</span>
                 </div>
-              )}
+              </div>
             </div>
-          </div>
-        </div>
-      </main>
+          </header>
+          
+          {/* Main chat area */}
+          <main className="relative z-10 max-w-3xl mx-auto px-6 py-8">
+            {/* Progress dots */}
+            {currentStep > 0 && renderProgressDots()}
+            
+            {/* Chat content */}
+            <div className="bg-gray-900/50 backdrop-blur border border-gray-800/50 rounded-2xl p-8">
+              {renderChatContent()}
+            </div>
+          </main>
+        </>
+      )}
+      
+      {phase === 'building' && renderBuilding()}
+      
+      {phase === 'review' && renderReview()}
+      
+      {phase === 'reformulate' && renderReformulate()}
     </div>
   );
 }
