@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mmusa-production.up.railway.app';
 
-// Steps do setup
+// Steps do setup (SEM OBJEÇÕES - removido conforme solicitado)
 const STEPS = [
   { id: 'intro', title: 'Introduction', icon: '🚀' },
   { id: 'companyName', title: 'Company', icon: '🏢' },
@@ -18,7 +18,6 @@ const STEPS = [
   { id: 'team', title: 'Team', icon: '👥' },
   { id: 'objective', title: 'Objective', icon: '🎯' },
   { id: 'personality', title: 'Personality', icon: '🎭' },
-  { id: 'objections', title: 'Objections', icon: '💬' },
   { id: 'languages', title: 'Languages', icon: '🌐' }
 ];
 
@@ -53,6 +52,7 @@ export default function SetupPage() {
   const [isCheckingSetup, setIsCheckingSetup] = useState(true);
   const [buildProgress, setBuildProgress] = useState(0);
   const [buildStage, setBuildStage] = useState('');
+  const [saveError, setSaveError] = useState(null);
   
   // Dados do setup
   const [data, setData] = useState({
@@ -62,9 +62,8 @@ export default function SetupPage() {
     differentials: [],
     team: [],
     objective: '',
-    tone: '',
+    tone: 'friendly',
     assistantName: '',
-    objections: [],
     languages: ['en']
   });
   
@@ -75,20 +74,17 @@ export default function SetupPage() {
   const [suggestions, setSuggestions] = useState({
     products: [],
     differentials: [],
-    objectives: [],
-    objections: []
+    objectives: []
   });
   const [loadingSuggestions, setLoadingSuggestions] = useState({
     products: false,
     differentials: false,
-    objectives: false,
-    objections: false
+    objectives: false
   });
   const [suggestionsLoaded, setSuggestionsLoaded] = useState({
     products: false,
     differentials: false,
-    objectives: false,
-    objections: false
+    objectives: false
   });
   
   // Buscar sugestões da IA
@@ -132,6 +128,7 @@ export default function SetupPage() {
         ...prev,
         [type]: getFallbackSuggestions(type, data)
       }));
+      setSuggestionsLoaded(prev => ({ ...prev, [type]: true }));
     } finally {
       setLoadingSuggestions(prev => ({ ...prev, [type]: false }));
     }
@@ -146,15 +143,9 @@ export default function SetupPage() {
         return ['Licensed and insured', 'Free quotes', 'Flexible financing', 'Satisfaction guarantee', 'Fast response time'];
       case 'objectives':
         return [
-          `Qualify interested leads and schedule consultations for ${data.companyName}`,
+          `Qualify interested leads and schedule consultations for ${data.companyName || 'the company'}`,
           'Collect contact information and understand customer needs',
           'Answer questions and provide initial information about services'
-        ];
-      case 'objections':
-        return [
-          { objection: "It's too expensive", response: "I understand budget is important. We offer flexible financing options." },
-          { objection: "I need to think about it", response: "Of course, take your time. Would you like me to send you some information?" },
-          { objection: "I'm just looking around", response: "That's great! Would a free quote help you compare?" }
         ];
       default:
         return [];
@@ -171,22 +162,8 @@ export default function SetupPage() {
       fetchAISuggestions('differentials');
     } else if (step?.id === 'objective' && !suggestionsLoaded.objectives) {
       fetchAISuggestions('objectives');
-    } else if (step?.id === 'objections' && !suggestionsLoaded.objections) {
-      fetchAISuggestions('objections');
     }
   }, [currentStep, fetchAISuggestions, suggestionsLoaded]);
-  
-  // Resetar sugestões quando o about mudar significativamente
-  useEffect(() => {
-    // Se about mudou e já tinha carregado sugestões, resetar
-    if (data.about && data.about.length > 50) {
-      const hasLoadedAny = Object.values(suggestionsLoaded).some(v => v);
-      if (!hasLoadedAny) return;
-      
-      // Verificar se precisa resetar (mudança significativa)
-      // Por simplicidade, não resetamos automaticamente - usuário pode voltar e mudar
-    }
-  }, [data.about, suggestionsLoaded]);
   
   // Campos temporários
   const [tempInput, setTempInput] = useState('');
@@ -257,13 +234,12 @@ export default function SetupPage() {
     switch (step?.id) {
       case 'intro': return true;
       case 'companyName': return data.companyName.trim().length > 0;
-      case 'about': return data.about.trim().length > 20;
+      case 'about': return data.about.trim().length >= 20;
       case 'products': return data.products.length > 0;
-      case 'differentials': return data.differentials.length > 0;
+      case 'differentials': return true; // Agora pode pular
       case 'team': return true; // Opcional
       case 'objective': return data.objective.trim().length > 0;
       case 'personality': return data.tone && data.assistantName;
-      case 'objections': return true; // Opcional
       case 'languages': return data.languages.length > 0;
       default: return true;
     }
@@ -349,8 +325,8 @@ ${data.about}
 ## PRODUCTS AND SERVICES
 ${data.products.map(p => `- ${p}`).join('\n')}
 
-## WHAT MAKES US DIFFERENT
-${data.differentials.map(d => `- ${d}`).join('\n')}
+${data.differentials.length > 0 ? `## WHAT MAKES US DIFFERENT
+${data.differentials.map(d => `- ${d}`).join('\n')}` : ''}
 
 ${data.team.length > 0 ? `## KEY TEAM MEMBERS
 ${data.team.map(t => `- ${t.name}: ${t.role}`).join('\n')}` : ''}
@@ -360,10 +336,6 @@ ${data.objective}
 
 ## YOUR PERSONALITY
 Be ${toneDesc[data.tone] || toneDesc.friendly}. Keep responses concise (1-2 sentences). Ask one question at a time.
-
-${data.objections.length > 0 ? `## HANDLING OBJECTIONS
-${data.objections.map(o => `If they say "${o.objection}":
-→ ${o.response}`).join('\n\n')}` : ''}
 
 ## CRITICAL RULES
 - Never invent information not provided above
@@ -375,25 +347,72 @@ ${data.objections.map(o => `If they say "${o.objection}":
   
   const handleSave = async () => {
     setIsSaving(true);
+    setSaveError(null);
     
     try {
+      // Validações antes de enviar
+      if (!data.companyName || data.companyName.trim().length === 0) {
+        throw new Error('Company name is required');
+      }
+      
+      if (!data.about || data.about.trim().length < 20) {
+        throw new Error('Business description must have at least 20 characters');
+      }
+      
+      if (!data.objective || data.objective.trim().length === 0) {
+        throw new Error('Objective is required');
+      }
+      
+      if (!data.assistantName || data.assistantName.trim().length === 0) {
+        throw new Error('Assistant name is required');
+      }
+      
+      const payload = {
+        // Dados da empresa
+        companyName: data.companyName.trim(),
+        about: data.about.trim(),
+        products: data.products,
+        differentials: data.differentials,
+        team: data.team,
+        
+        // Dados do prompt
+        objective: data.objective.trim(),
+        tone: data.tone || 'friendly',
+        assistantName: data.assistantName.trim(),
+        objections: [], // Vazio - será preenchido dentro da ferramenta
+        
+        // Idiomas
+        languages: data.languages,
+        defaultLanguage: data.languages[0] || 'en',
+        
+        // Prompt gerado
+        generatedPrompt: generatePromptContent(),
+        promptName: 'First Contact',
+        isDefault: true
+      };
+      
+      console.log('Saving setup:', payload);
+      
       const response = await fetch(`${API_URL}/api/setup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...data,
-          generatedPrompt: generatePromptContent(),
-          promptName: 'First Contact',
-          isDefault: true
-        })
+        body: JSON.stringify(payload)
       });
       
-      if (!response.ok) throw new Error('Failed to save');
+      const result = await response.json();
       
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to save configuration');
+      }
+      
+      console.log('Setup saved successfully:', result);
+      
+      // Redirecionar para o dashboard
       window.location.href = '/';
+      
     } catch (error) {
       console.error('Error saving:', error);
-      alert('Error saving. Please try again.');
+      setSaveError(error.message || 'Error saving. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -465,44 +484,39 @@ ${data.objections.map(o => `If they say "${o.objection}":
               </div>
               <div className="space-y-4 flex-1">
                 <h2 className="text-2xl font-bold text-white">
-                  Welcome! Let's build your AI assistant.
+                  Let's create your AI assistant's first prompt.
                 </h2>
                 <p className="text-gray-300 leading-relaxed">
-                  In the next few minutes, I'll ask you some questions about your business. 
-                  Your answers will help me create a custom <span className="text-violet-400 font-medium">prompt</span> — 
-                  the instructions that tell your AI exactly how to behave on calls.
+                  This initial prompt is <span className="text-violet-400 font-semibold">essential</span> for your AI to work properly. 
+                  I'll help you build the best possible version — and you can always edit it later inside the tool.
                 </p>
               </div>
             </div>
             
-            <div className="bg-violet-500/10 border border-violet-500/20 rounded-2xl p-5 ml-16">
-              <h3 className="text-violet-400 font-semibold flex items-center gap-2 mb-3">
-                <span>💡</span> What is a prompt?
-              </h3>
-              <p className="text-gray-300 leading-relaxed text-sm">
-                Think of it as a detailed briefing. It includes who you are, what you sell, 
-                how you want your AI to talk, and what goals it should achieve. 
-                The better the information you provide, the more natural and effective your AI will be.
-              </p>
-            </div>
-            
             <div className="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5 ml-16">
               <h3 className="text-white font-semibold mb-3">Here's what we'll cover:</h3>
-              <div className="grid grid-cols-2 gap-2 text-sm text-gray-400">
-                <div className="flex items-center gap-2"><span className="text-violet-400">✓</span> Your company & what you do</div>
-                <div className="flex items-center gap-2"><span className="text-violet-400">✓</span> Products and services</div>
-                <div className="flex items-center gap-2"><span className="text-violet-400">✓</span> What makes you special</div>
-                <div className="flex items-center gap-2"><span className="text-violet-400">✓</span> Goals for your calls</div>
-                <div className="flex items-center gap-2"><span className="text-violet-400">✓</span> AI personality</div>
-                <div className="flex items-center gap-2"><span className="text-violet-400">✓</span> Handling objections</div>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-3 text-gray-400">
+                  <span className="w-6 h-6 bg-gray-700 rounded-full flex items-center justify-center text-xs">1</span>
+                  <span>Your company name & description</span>
+                </div>
+                <div className="flex items-center gap-3 text-gray-400">
+                  <span className="w-6 h-6 bg-gray-700 rounded-full flex items-center justify-center text-xs">2</span>
+                  <span>Products and services you offer</span>
+                </div>
+                <div className="flex items-center gap-3 text-gray-400">
+                  <span className="w-6 h-6 bg-gray-700 rounded-full flex items-center justify-center text-xs">3</span>
+                  <span>What makes you special (optional)</span>
+                </div>
+                <div className="flex items-center gap-3 text-violet-400 font-medium">
+                  <span className="w-6 h-6 bg-violet-600 rounded-full flex items-center justify-center text-xs text-white">4</span>
+                  <span className="underline decoration-violet-400">The objective — what your AI should achieve on each call</span>
+                </div>
+                <div className="flex items-center gap-3 text-gray-400">
+                  <span className="w-6 h-6 bg-gray-700 rounded-full flex items-center justify-center text-xs">5</span>
+                  <span>AI personality & supported languages</span>
+                </div>
               </div>
-            </div>
-            
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 ml-16">
-              <p className="text-amber-200/90 text-sm">
-                <span className="font-medium text-amber-400">📝 Note:</span> You can always come back and change any answer later. 
-                But take your time now — this is the foundation for how your AI will represent your business.
-              </p>
             </div>
             
             <div className="ml-16">
@@ -528,12 +542,9 @@ ${data.objections.map(o => `If they say "${o.objection}":
                 <h2 className="text-2xl font-bold text-white">
                   What's your company name?
                 </h2>
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-                  <p className="text-amber-200/80 text-sm">
-                    <span className="font-medium text-amber-400">💡</span> This is how your AI will introduce itself: 
-                    <span className="text-white"> "Hi, I'm calling from <strong>[your company]</strong>..."</span>
-                  </p>
-                </div>
+                <p className="text-gray-400 text-sm">
+                  This is how your AI will introduce itself: "Hi, I'm calling from <span className="text-white font-medium">[your company]</span>..."
+                </p>
               </div>
             </div>
             
@@ -583,12 +594,6 @@ ${data.objections.map(o => `If they say "${o.objection}":
                   What do you do? Where do you operate? Who are your customers? 
                   Just write naturally, like you're explaining to a friend.
                 </p>
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-                  <p className="text-amber-200/80 text-sm">
-                    <span className="font-medium text-amber-400">💡</span> This is the most important step. 
-                    The AI will use this information to generate smart suggestions for the next steps.
-                  </p>
-                </div>
               </div>
             </div>
             
@@ -610,6 +615,13 @@ ${data.objections.map(o => `If they say "${o.objection}":
                 rows={5}
                 className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-5 py-4 text-base outline-none transition-all duration-300 placeholder:text-gray-500 resize-none"
               />
+              
+              <p className="text-xs text-gray-500">
+                {data.about.trim().length < 20 
+                  ? `${20 - data.about.trim().length} more characters needed`
+                  : '✓ Good description!'
+                }
+              </p>
               
               <div className="flex gap-3">
                 <button
@@ -642,15 +654,46 @@ ${data.objections.map(o => `If they say "${o.objection}":
                 <h2 className="text-2xl font-bold text-white">
                   What products or services do you offer?
                 </h2>
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-                  <p className="text-amber-200/80 text-sm">
-                    <span className="font-medium text-amber-400">💡</span> Your AI needs to know what it can discuss and offer to customers.
-                  </p>
-                </div>
+                <p className="text-gray-400 text-sm">
+                  Your AI needs to know what it can discuss and offer to customers.
+                </p>
               </div>
             </div>
             
             <div className="ml-16 space-y-4">
+              {/* Custom input FIRST - acima das sugestões */}
+              <div className="space-y-2">
+                <p className="text-sm text-gray-300 font-medium">✍️ Type your own:</p>
+                <div className="flex gap-2">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={tempInput}
+                    onChange={(e) => setTempInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && tempInput.trim()) {
+                        updateData('products', [...data.products, tempInput.trim()]);
+                        setTempInput('');
+                      }
+                    }}
+                    placeholder="Type and press Enter..."
+                    className="flex-1 bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none transition-all duration-300 placeholder:text-gray-500"
+                  />
+                  <button
+                    onClick={() => {
+                      if (tempInput.trim()) {
+                        updateData('products', [...data.products, tempInput.trim()]);
+                        setTempInput('');
+                      }
+                    }}
+                    disabled={!tempInput.trim()}
+                    className="px-5 py-3 bg-violet-600 hover:bg-violet-500 disabled:bg-gray-700 disabled:opacity-50 rounded-xl transition-colors font-medium"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+              
               {/* Selected */}
               {data.products.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -676,8 +719,8 @@ ${data.objections.map(o => `If they say "${o.objection}":
                 renderSuggestionsLoading()
               ) : suggestions.products.length > 0 ? (
                 <div className="space-y-2">
-                  <p className="text-sm text-gray-400">
-                    🤖 Based on your description, you might offer:
+                  <p className="text-sm text-gray-500">
+                    Or pick from AI suggestions:
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {suggestions.products
@@ -694,39 +737,6 @@ ${data.objections.map(o => `If they say "${o.objection}":
                   </div>
                 </div>
               ) : null}
-              
-              {/* Custom input */}
-              <div className="space-y-2">
-                <p className="text-sm text-gray-400">✍️ Or add your own:</p>
-                <div className="flex gap-2">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={tempInput}
-                    onChange={(e) => setTempInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && tempInput.trim()) {
-                        updateData('products', [...data.products, tempInput.trim()]);
-                        setTempInput('');
-                      }
-                    }}
-                    placeholder="Type and press Enter..."
-                    className="flex-1 bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none transition-all duration-300 placeholder:text-gray-500"
-                  />
-                  <button
-                    onClick={() => {
-                      if (tempInput.trim()) {
-                        updateData('products', [...data.products, tempInput.trim()]);
-                        setTempInput('');
-                      }
-                    }}
-                    disabled={!tempInput.trim()}
-                    className="px-5 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-xl transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
               
               <div className="flex gap-3">
                 <button
@@ -759,15 +769,46 @@ ${data.objections.map(o => `If they say "${o.objection}":
                 <h2 className="text-2xl font-bold text-white">
                   What makes {data.companyName} special?
                 </h2>
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-                  <p className="text-amber-200/80 text-sm">
-                    <span className="font-medium text-amber-400">💡</span> These are the selling points your AI will use to convince hesitant prospects.
-                  </p>
-                </div>
+                <p className="text-gray-400 text-sm">
+                  These selling points help your AI convince hesitant prospects. 
+                  <span className="text-gray-500"> (optional)</span>
+                </p>
               </div>
             </div>
             
             <div className="ml-16 space-y-4">
+              {/* Custom input FIRST */}
+              <div className="space-y-2">
+                <p className="text-sm text-gray-300 font-medium">✍️ Type your own:</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={tempInput}
+                    onChange={(e) => setTempInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && tempInput.trim()) {
+                        updateData('differentials', [...data.differentials, tempInput.trim()]);
+                        setTempInput('');
+                      }
+                    }}
+                    placeholder="What makes you different..."
+                    className="flex-1 bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none transition-all duration-300 placeholder:text-gray-500"
+                  />
+                  <button
+                    onClick={() => {
+                      if (tempInput.trim()) {
+                        updateData('differentials', [...data.differentials, tempInput.trim()]);
+                        setTempInput('');
+                      }
+                    }}
+                    disabled={!tempInput.trim()}
+                    className="px-5 py-3 bg-violet-600 hover:bg-violet-500 disabled:bg-gray-700 disabled:opacity-50 rounded-xl transition-colors font-medium"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+              
               {/* Selected */}
               {data.differentials.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -793,7 +834,7 @@ ${data.objections.map(o => `If they say "${o.objection}":
                 renderSuggestionsLoading()
               ) : suggestions.differentials.length > 0 ? (
                 <div className="space-y-2">
-                  <p className="text-sm text-gray-400">🤖 AI suggestions based on your business:</p>
+                  <p className="text-sm text-gray-500">Or pick from AI suggestions:</p>
                   <div className="flex flex-wrap gap-2">
                     {suggestions.differentials
                       .filter(d => !data.differentials.includes(d))
@@ -810,38 +851,6 @@ ${data.objections.map(o => `If they say "${o.objection}":
                 </div>
               ) : null}
               
-              {/* Custom input */}
-              <div className="space-y-2">
-                <p className="text-sm text-gray-400">✍️ Or add your own:</p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={tempInput}
-                    onChange={(e) => setTempInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && tempInput.trim()) {
-                        updateData('differentials', [...data.differentials, tempInput.trim()]);
-                        setTempInput('');
-                      }
-                    }}
-                    placeholder="What makes you different..."
-                    className="flex-1 bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none transition-all duration-300 placeholder:text-gray-500"
-                  />
-                  <button
-                    onClick={() => {
-                      if (tempInput.trim()) {
-                        updateData('differentials', [...data.differentials, tempInput.trim()]);
-                        setTempInput('');
-                      }
-                    }}
-                    disabled={!tempInput.trim()}
-                    className="px-5 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-xl transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-              
               <div className="flex gap-3">
                 <button
                   onClick={goToPrev}
@@ -851,10 +860,9 @@ ${data.objections.map(o => `If they say "${o.objection}":
                 </button>
                 <button
                   onClick={goToNext}
-                  disabled={!canProceed()}
-                  className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition-all duration-300"
+                  className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-xl font-semibold transition-all duration-300"
                 >
-                  Continue →
+                  {data.differentials.length > 0 ? 'Continue →' : 'Skip for now →'}
                 </button>
               </div>
             </div>
@@ -873,12 +881,10 @@ ${data.objections.map(o => `If they say "${o.objection}":
                 <h2 className="text-2xl font-bold text-white">
                   Who can be mentioned in calls?
                 </h2>
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-                  <p className="text-amber-200/80 text-sm">
-                    <span className="font-medium text-amber-400">💡</span> Optional. Add key people the AI can reference 
-                    (e.g., "I can have our sales manager John call you back").
-                  </p>
-                </div>
+                <p className="text-gray-400 text-sm">
+                  Add key people the AI can reference (e.g., "I can have our sales manager John call you back").
+                  <span className="text-gray-500"> (optional)</span>
+                </p>
               </div>
             </div>
             
@@ -958,27 +964,41 @@ ${data.objections.map(o => `If they say "${o.objection}":
           <div className="space-y-6">
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
-                🤖
+                🎯
               </div>
               <div className="space-y-3 flex-1">
                 <h2 className="text-2xl font-bold text-white">
                   What's the main goal of your calls?
                 </h2>
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-                  <p className="text-amber-200/80 text-sm">
-                    <span className="font-medium text-amber-400">💡</span> This tells your AI what success looks like for each conversation.
+                <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-4">
+                  <p className="text-violet-200 text-sm">
+                    <span className="font-bold text-violet-400">⚡ This is the most important step.</span><br/>
+                    This tells your AI exactly what success looks like. Be specific about what you want to achieve on each conversation.
                   </p>
                 </div>
               </div>
             </div>
             
             <div className="ml-16 space-y-4">
+              {/* Custom input FIRST */}
+              <div className="space-y-2">
+                <p className="text-sm text-gray-300 font-medium">✍️ Write your objective:</p>
+                <textarea
+                  ref={inputRef}
+                  value={data.objective}
+                  onChange={(e) => updateData('objective', e.target.value)}
+                  placeholder="Describe what you want your AI to achieve on each call..."
+                  rows={3}
+                  className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none transition-all duration-300 placeholder:text-gray-500 resize-none"
+                />
+              </div>
+              
               {/* AI Suggestions */}
               {loadingSuggestions.objectives ? (
                 renderSuggestionsLoading()
               ) : suggestions.objectives.length > 0 ? (
                 <div className="space-y-2">
-                  <p className="text-sm text-gray-400">🤖 AI-suggested objectives for {data.companyName}:</p>
+                  <p className="text-sm text-gray-500">Or start with a suggestion:</p>
                   <div className="space-y-2">
                     {suggestions.objectives.map((obj, i) => (
                       <button
@@ -996,19 +1016,6 @@ ${data.objections.map(o => `If they say "${o.objection}":
                   </div>
                 </div>
               ) : null}
-              
-              {/* Custom input */}
-              <div className="space-y-2">
-                <p className="text-sm text-gray-400">✍️ Or write your own objective:</p>
-                <textarea
-                  ref={inputRef}
-                  value={data.objective}
-                  onChange={(e) => updateData('objective', e.target.value)}
-                  placeholder="Describe what you want your AI to achieve on each call..."
-                  rows={3}
-                  className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none transition-all duration-300 placeholder:text-gray-500 resize-none"
-                />
-              </div>
               
               <div className="flex gap-3">
                 <button
@@ -1041,19 +1048,45 @@ ${data.objections.map(o => `If they say "${o.objection}":
                 <h2 className="text-2xl font-bold text-white">
                   Let's give your AI some personality!
                 </h2>
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-                  <p className="text-amber-200/80 text-sm">
-                    <span className="font-medium text-amber-400">💡</span> Choose a tone and name for your AI assistant. 
-                    This affects how it speaks to customers.
-                  </p>
-                </div>
+                <p className="text-gray-400 text-sm">
+                  Choose a tone and name for your AI assistant. This affects how it speaks to customers.
+                </p>
               </div>
             </div>
             
             <div className="ml-16 space-y-6">
+              {/* Name input FIRST */}
+              <div className="space-y-3">
+                <p className="text-sm text-gray-300 font-medium">Give your AI a name:</p>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={data.assistantName}
+                  onChange={(e) => updateData('assistantName', e.target.value)}
+                  placeholder="e.g., Julia"
+                  className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none transition-all duration-300 placeholder:text-gray-500"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <span className="text-xs text-gray-500">Quick picks:</span>
+                  {SUGGESTED_NAMES.map(name => (
+                    <button
+                      key={name}
+                      onClick={() => updateData('assistantName', name)}
+                      className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                        data.assistantName === name
+                          ? 'bg-violet-500 text-white'
+                          : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
+                      }`}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
               {/* Tone selection */}
               <div className="space-y-3">
-                <p className="text-sm text-gray-400">Choose a tone:</p>
+                <p className="text-sm text-gray-300 font-medium">Choose a tone:</p>
                 <div className="grid grid-cols-3 gap-3">
                   {TONES.map(tone => (
                     <button
@@ -1068,33 +1101,6 @@ ${data.objections.map(o => `If they say "${o.objection}":
                       <span className="text-2xl">{tone.icon}</span>
                       <span className="block font-medium mt-2">{tone.label}</span>
                       <span className="block text-xs text-gray-400 mt-1">{tone.desc}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              
-              {/* Name selection */}
-              <div className="space-y-3">
-                <p className="text-sm text-gray-400">Give your AI a name:</p>
-                <input
-                  type="text"
-                  value={data.assistantName}
-                  onChange={(e) => updateData('assistantName', e.target.value)}
-                  placeholder="e.g., Julia"
-                  className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none transition-all duration-300 placeholder:text-gray-500"
-                />
-                <div className="flex flex-wrap gap-2">
-                  {SUGGESTED_NAMES.map(name => (
-                    <button
-                      key={name}
-                      onClick={() => updateData('assistantName', name)}
-                      className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                        data.assistantName === name
-                          ? 'bg-violet-500 text-white'
-                          : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
-                      }`}
-                    >
-                      {name}
                     </button>
                   ))}
                 </div>
@@ -1132,90 +1138,6 @@ ${data.objections.map(o => `If they say "${o.objection}":
           </div>
         );
         
-      // ==================== OBJECTIONS ====================
-      case 'objections':
-        return (
-          <div className="space-y-6">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
-                🤖
-              </div>
-              <div className="space-y-3 flex-1">
-                <h2 className="text-2xl font-bold text-white">
-                  How should {data.assistantName || 'your AI'} handle objections?
-                </h2>
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-                  <p className="text-amber-200/80 text-sm">
-                    <span className="font-medium text-amber-400">💡</span> Optional but recommended. 
-                    Teach your AI how to respond to common pushback.
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="ml-16 space-y-4">
-              {/* Added objections */}
-              {data.objections.length > 0 && (
-                <div className="space-y-2">
-                  {data.objections.map((obj, i) => (
-                    <div key={i} className="p-4 bg-gray-800/50 border border-gray-700 rounded-xl">
-                      <div className="flex justify-between">
-                        <p className="text-sm text-red-400">"{obj.objection}"</p>
-                        <button
-                          onClick={() => updateData('objections', data.objections.filter((_, idx) => idx !== i))}
-                          className="text-gray-400 hover:text-red-400 transition-colors"
-                        >
-                          ×
-                        </button>
-                      </div>
-                      <p className="text-sm text-green-400 mt-2">→ {obj.response}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* AI Suggestions */}
-              {loadingSuggestions.objections ? (
-                renderSuggestionsLoading()
-              ) : suggestions.objections.length > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-400">🤖 Common objections for your business:</p>
-                  <div className="space-y-2">
-                    {suggestions.objections
-                      .filter(o => !data.objections.find(existing => existing.objection === o.objection))
-                      .slice(0, 3)
-                      .map((obj, i) => (
-                        <button
-                          key={i}
-                          onClick={() => updateData('objections', [...data.objections, obj])}
-                          className="w-full p-4 bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 rounded-xl text-left transition-colors"
-                        >
-                          <p className="text-sm text-gray-300">+ "{obj.objection}"</p>
-                          <p className="text-xs text-gray-500 mt-1">→ {obj.response.substring(0, 60)}...</p>
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              ) : null}
-              
-              <div className="flex gap-3">
-                <button
-                  onClick={goToPrev}
-                  className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
-                >
-                  ← Back
-                </button>
-                <button
-                  onClick={goToNext}
-                  className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-xl font-semibold transition-all duration-300"
-                >
-                  {data.objections.length > 0 ? 'Continue →' : 'Skip for now →'}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-        
       // ==================== LANGUAGES ====================
       case 'languages':
         return (
@@ -1228,12 +1150,9 @@ ${data.objections.map(o => `If they say "${o.objection}":
                 <h2 className="text-2xl font-bold text-white">
                   Last step! What languages should {data.assistantName || 'your AI'} speak?
                 </h2>
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-                  <p className="text-amber-200/80 text-sm">
-                    <span className="font-medium text-amber-400">💡</span> Your AI will automatically adapt to speak 
-                    the language configured for each lead.
-                  </p>
-                </div>
+                <p className="text-gray-400 text-sm">
+                  Your AI will automatically adapt to speak the language configured for each lead.
+                </p>
               </div>
             </div>
             
@@ -1261,7 +1180,7 @@ ${data.objections.map(o => `If they say "${o.objection}":
                     <span className="text-4xl">{lang.flag}</span>
                     <span className="block mt-3 font-medium">{lang.label}</span>
                     {data.languages.includes(lang.id) && (
-                      <span className="block text-green-400 text-sm mt-1">✓ Selected</span>
+                      <span className="block text-xs text-violet-400 mt-1">✓ Selected</span>
                     )}
                   </button>
                 ))}
@@ -1326,11 +1245,10 @@ ${data.objections.map(o => `If they say "${o.objection}":
       { id: 'companyName', icon: '🏢', title: 'Company', value: data.companyName },
       { id: 'about', icon: '📝', title: 'About', value: data.about.length > 100 ? data.about.substring(0, 100) + '...' : data.about },
       { id: 'products', icon: '📦', title: 'Products & Services', value: data.products.join(', ') },
-      { id: 'differentials', icon: '⭐', title: 'Differentials', value: data.differentials.join(', ') },
+      { id: 'differentials', icon: '⭐', title: 'Differentials', value: data.differentials.length > 0 ? data.differentials.join(', ') : 'Not specified' },
       { id: 'team', icon: '👥', title: 'Team', value: data.team.length > 0 ? data.team.map(t => `${t.name} (${t.role})`).join(', ') : 'Not specified' },
       { id: 'objective', icon: '🎯', title: 'Objective', value: data.objective.length > 100 ? data.objective.substring(0, 100) + '...' : data.objective },
       { id: 'personality', icon: '🎭', title: 'Personality', value: `${data.assistantName} • ${TONES.find(t => t.id === data.tone)?.label || 'Friendly'}` },
-      { id: 'objections', icon: '💬', title: 'Objections', value: data.objections.length > 0 ? `${data.objections.length} configured` : 'Not specified' },
       { id: 'languages', icon: '🌐', title: 'Languages', value: data.languages.map(l => LANGUAGES.find(lang => lang.id === l)?.flag).join(' ') }
     ];
     
@@ -1343,6 +1261,15 @@ ${data.objections.map(o => `If they say "${o.objection}":
           <h2 className="text-3xl font-bold text-white mb-2">Your AI is ready!</h2>
           <p className="text-gray-400">Review the configuration below. Click any section to make changes.</p>
         </div>
+        
+        {/* Error message */}
+        {saveError && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-6">
+            <p className="text-red-400 text-sm">
+              <span className="font-bold">Error:</span> {saveError}
+            </p>
+          </div>
+        )}
         
         {/* Assistant Preview */}
         <div className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/20 rounded-2xl p-6 mb-8">
@@ -1384,10 +1311,13 @@ ${data.objections.map(o => `If they say "${o.objection}":
         {/* Actions */}
         <div className="flex gap-4">
           <button
-            onClick={() => startReformulate(null)}
+            onClick={() => {
+              setPhase('chat');
+              setCurrentStep(0);
+            }}
             className="px-6 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
           >
-            🔄 Reformulate All
+            🔄 Start Over
           </button>
           <button
             onClick={handleSave}
@@ -1406,7 +1336,6 @@ ${data.objections.map(o => `If they say "${o.objection}":
   // ============================================================================
   
   const renderReformulate = () => {
-    // Se reformulateStep for null, significa "reformular tudo" - volta ao início
     if (reformulateStep === null) {
       setPhase('chat');
       setCurrentStep(0);
@@ -1425,7 +1354,6 @@ ${data.objections.map(o => `If they say "${o.objection}":
         case 'team': return data.team.map(t => `${t.name} (${t.role})`).join(', ');
         case 'objective': return data.objective;
         case 'personality': return `${data.assistantName} • ${TONES.find(t => t.id === data.tone)?.label}`;
-        case 'objections': return data.objections.map(o => o.objection).join(', ');
         case 'languages': return data.languages.map(l => LANGUAGES.find(lang => lang.id === l)?.label).join(', ');
         default: return '';
       }
@@ -1524,6 +1452,13 @@ ${data.objections.map(o => `If they say "${o.objection}":
               
               {reformulateStep === 'personality' && (
                 <div className="space-y-4">
+                  <input
+                    type="text"
+                    value={data.assistantName}
+                    onChange={(e) => updateData('assistantName', e.target.value)}
+                    placeholder="Assistant name"
+                    className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none"
+                  />
                   <div className="grid grid-cols-3 gap-3">
                     {TONES.map(tone => (
                       <button
@@ -1536,13 +1471,6 @@ ${data.objections.map(o => `If they say "${o.objection}":
                       </button>
                     ))}
                   </div>
-                  <input
-                    type="text"
-                    value={data.assistantName}
-                    onChange={(e) => updateData('assistantName', e.target.value)}
-                    placeholder="Assistant name"
-                    className="w-full bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none"
-                  />
                 </div>
               )}
               
@@ -1565,6 +1493,53 @@ ${data.objections.map(o => `If they say "${o.objection}":
                       <span className="block text-sm mt-2">{lang.label}</span>
                     </button>
                   ))}
+                </div>
+              )}
+              
+              {reformulateStep === 'team' && (
+                <div className="space-y-3">
+                  {data.team.map((member, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 bg-gray-800/50 border border-gray-700 rounded-xl">
+                      <div>
+                        <span className="font-medium">{member.name}</span>
+                        <span className="text-gray-400 ml-2">— {member.role}</span>
+                      </div>
+                      <button
+                        onClick={() => updateData('team', data.team.filter((_, idx) => idx !== i))}
+                        className="text-gray-400 hover:text-red-400"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      value={tempTeamMember.name}
+                      onChange={(e) => setTempTeamMember(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Name"
+                      className="bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={tempTeamMember.role}
+                      onChange={(e) => setTempTeamMember(prev => ({ ...prev, role: e.target.value }))}
+                      placeholder="Role"
+                      className="bg-gray-800/80 border-2 border-gray-700 focus:border-violet-500 rounded-xl px-4 py-3 outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (tempTeamMember.name.trim() && tempTeamMember.role.trim()) {
+                        updateData('team', [...data.team, tempTeamMember]);
+                        setTempTeamMember({ name: '', role: '' });
+                      }
+                    }}
+                    disabled={!tempTeamMember.name.trim() || !tempTeamMember.role.trim()}
+                    className="w-full py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-xl"
+                  >
+                    + Add Team Member
+                  </button>
                 </div>
               )}
               
