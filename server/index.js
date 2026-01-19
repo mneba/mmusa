@@ -1,7 +1,6 @@
 /**
  * Pool Leads AI Agent - WebSocket Server v14
- * 
- * v14: CORREÃ‡ÃƒO IDIOMAS + DADOS DO LEAD + SETTINGS
+ *  * v14: CORREÃ‡ÃƒO IDIOMAS + DADOS DO LEAD + SETTINGS
  *      - promptLang (lang): define qual SCRIPT/PROMPT a IA usa
  *      - leadLanguage: define qual IDIOMA a IA FALA na conversa
  *      - Voz OpenAI agora usa leadLanguage, nÃ£o promptLang
@@ -1187,7 +1186,7 @@ fastify.delete('/api/prompts', async (request, reply) => {
 });
 
 // ============================================================================
-// API - SETTINGS (ConfiguraÃ§Ãµes da Empresa)
+// API - SETTINGS (Configurações da Empresa)
 // ============================================================================
 
 // Cache de settings
@@ -1211,14 +1210,14 @@ fastify.get('/api/settings', async (request, reply) => {
     if (doc.exists) {
       settingsCache = doc.data();
       settingsCacheTime = Date.now();
-      console.log('ðŸ“‹ Settings carregados:', settingsCache);
+      console.log('📋 Settings carregados:', settingsCache);
       return settingsCache;
     }
     
-    // Retornar default se nÃ£o existir
+    // Retornar default se não existir
     return { companyName: COMPANY_NAME };
   } catch (error) {
-    console.error('âŒ Erro ao carregar settings:', error.message);
+    console.error('❌ Erro ao carregar settings:', error.message);
     return reply.status(500).send({ error: error.message });
   }
 });
@@ -1245,10 +1244,10 @@ fastify.put('/api/settings', async (request, reply) => {
     settingsCache = null;
     settingsCacheTime = 0;
     
-    console.log('âœ… Settings salvos:', { companyName });
+    console.log('✅ Settings salvos:', { companyName });
     return { success: true, companyName: companyName.trim() };
   } catch (error) {
-    console.error('âŒ Erro ao salvar settings:', error.message);
+    console.error('❌ Erro ao salvar settings:', error.message);
     return reply.status(500).send({ error: error.message });
   }
 });
@@ -1431,6 +1430,276 @@ fastify.post('/api/setup', async (request, reply) => {
     return reply.status(500).send({ error: error.message });
   }
 });
+
+// ============================================================================
+// API - SETUP SUGGESTIONS (Sugestões via IA)
+// ============================================================================
+
+// Função de fallback para sugestões (caso a IA falhe)
+function getSetupFallbackSuggestions(type, data) {
+  const aboutLower = (data.about || '').toLowerCase();
+  
+  switch (type) {
+    case 'products':
+      const productSuggestions = [];
+      
+      if (aboutLower.includes('pool') || aboutLower.includes('piscina')) {
+        productSuggestions.push('Pool installation', 'Pool maintenance', 'Pool renovation', 'Pool equipment', 'Pool cleaning');
+      }
+      if (aboutLower.includes('solar') || aboutLower.includes('energy')) {
+        productSuggestions.push('Solar panel installation', 'Energy consulting', 'Battery storage', 'System maintenance');
+      }
+      if (aboutLower.includes('real estate') || aboutLower.includes('property')) {
+        productSuggestions.push('Property sales', 'Property rentals', 'Home valuations', 'Investment consulting');
+      }
+      if (aboutLower.includes('construction') || aboutLower.includes('build')) {
+        productSuggestions.push('New construction', 'Renovations', 'Remodeling', 'Project management');
+      }
+      if (aboutLower.includes('insurance')) {
+        productSuggestions.push('Home insurance', 'Auto insurance', 'Life insurance', 'Business insurance');
+      }
+      if (aboutLower.includes('hvac') || aboutLower.includes('air conditioning') || aboutLower.includes('heating')) {
+        productSuggestions.push('AC installation', 'Heating systems', 'HVAC maintenance', 'Duct cleaning', 'System repairs');
+      }
+      if (aboutLower.includes('plumb')) {
+        productSuggestions.push('Plumbing repairs', 'Pipe installation', 'Drain cleaning', 'Water heater services');
+      }
+      if (aboutLower.includes('roof')) {
+        productSuggestions.push('Roof installation', 'Roof repairs', 'Roof inspection', 'Gutter services');
+      }
+      if (aboutLower.includes('landscape') || aboutLower.includes('garden') || aboutLower.includes('lawn')) {
+        productSuggestions.push('Landscape design', 'Lawn maintenance', 'Tree services', 'Irrigation systems');
+      }
+      
+      if (productSuggestions.length === 0) {
+        productSuggestions.push('Consultation services', 'Product sales', 'Installation services', 'Maintenance plans', 'Custom solutions');
+      }
+      
+      return productSuggestions;
+      
+    case 'differentials':
+      return [
+        'Licensed and insured',
+        'Free quotes',
+        'Flexible financing options',
+        'Satisfaction guarantee',
+        'Fast response time',
+        'Quality workmanship',
+        'Competitive pricing',
+        'Professional team'
+      ];
+      
+    case 'objectives':
+      return [
+        `Qualify interested leads and schedule consultations for ${data.companyName || 'the company'}`,
+        'Collect contact information and understand customer needs',
+        'Answer questions and provide initial information about services',
+        'Schedule appointments and confirm availability',
+        'Follow up with previous leads who showed interest'
+      ];
+      
+    case 'objections':
+      return [
+        { objection: "It's too expensive", response: "I understand budget is important. We offer flexible financing options and can work within your budget." },
+        { objection: "I need to think about it", response: "Of course, take your time. Would you like me to send you some information to review?" },
+        { objection: "I'm just looking around", response: "That's great! It's smart to explore options. Would a free quote help you compare?" },
+        { objection: "Now is not a good time", response: "No problem. When would be a better time for us to connect?" },
+        { objection: "I already have someone", response: "That's fine! If you ever need a second opinion or backup option, we're here." }
+      ];
+      
+    default:
+      return [];
+  }
+}
+
+// Endpoint para gerar sugestões contextuais usando OpenAI
+fastify.post('/api/setup/suggestions', async (request, reply) => {
+  try {
+    const { type, companyName, about, products, differentials } = request.body;
+    
+    if (!type) {
+      return reply.status(400).send({ error: 'Type is required' });
+    }
+    
+    if (!about || about.trim().length < 20) {
+      // Se não tem about suficiente, retornar fallback
+      return {
+        success: true,
+        type,
+        suggestions: getSetupFallbackSuggestions(type, { about, companyName }),
+        usedFallback: true
+      };
+    }
+    
+    // Construir contexto para a IA
+    const context = `
+Company: ${companyName || 'Unknown'}
+Description: ${about}
+${products?.length > 0 ? `Already selected products/services: ${products.join(', ')}` : ''}
+${differentials?.length > 0 ? `Already selected differentials: ${differentials.join(', ')}` : ''}
+`.trim();
+    
+    let prompt = '';
+    let responseFormat = '';
+    
+    switch (type) {
+      case 'products':
+        prompt = `Based on this business description, suggest 6-8 specific products or services this company likely offers. 
+Be specific to their industry. Don't include items they already selected.
+Return ONLY a JSON array of strings, no explanation, no markdown.
+
+Business context:
+${context}
+
+Response format: ["Product 1", "Product 2", "Product 3"]`;
+        responseFormat = 'array';
+        break;
+        
+      case 'differentials':
+        prompt = `Based on this business description, suggest 6-8 competitive differentials or unique selling points this company might have.
+Be specific to their industry and what they described. Don't include items they already selected.
+Return ONLY a JSON array of strings, no explanation, no markdown.
+
+Business context:
+${context}
+
+Response format: ["Differential 1", "Differential 2", "Differential 3"]`;
+        responseFormat = 'array';
+        break;
+        
+      case 'objectives':
+        prompt = `Based on this business description, suggest 4-5 specific call objectives that would make sense for their AI phone assistant.
+These should be actionable goals for outbound sales/qualification calls.
+Return ONLY a JSON array of strings, no explanation, no markdown.
+
+Business context:
+${context}
+
+Response format: ["Objective 1", "Objective 2", "Objective 3"]`;
+        responseFormat = 'array';
+        break;
+        
+      case 'objections':
+        prompt = `Based on this business description, suggest 4-5 common objections customers might raise during sales calls and professional responses for each.
+Be specific to their industry.
+Return ONLY a JSON array of objects with "objection" and "response" fields, no explanation, no markdown.
+
+Business context:
+${context}
+
+Response format: [{"objection": "Example objection", "response": "Professional response"}]`;
+        responseFormat = 'objections';
+        break;
+        
+      default:
+        return reply.status(400).send({ error: 'Invalid suggestion type. Valid types: products, differentials, objectives, objections' });
+    }
+    
+    console.log(`🤖 Gerando sugestões de ${type} para ${companyName}...`);
+    
+    // Chamar OpenAI API
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful business consultant. Always respond with valid JSON only. No markdown code blocks, no explanation, just the JSON array or object.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 600
+      })
+    });
+    
+    if (!openaiResponse.ok) {
+      const errorText = await openaiResponse.text();
+      console.error('❌ OpenAI API Error:', errorText);
+      throw new Error('Failed to get AI suggestions');
+    }
+    
+    const openaiData = await openaiResponse.json();
+    const content = openaiData.choices?.[0]?.message?.content;
+    
+    if (!content) {
+      throw new Error('Empty response from AI');
+    }
+    
+    // Parse JSON response
+    let suggestions;
+    try {
+      // Remove possíveis backticks de markdown e whitespace
+      let cleanContent = content
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/g, '')
+        .trim();
+      
+      suggestions = JSON.parse(cleanContent);
+    } catch (parseError) {
+      console.error('❌ Failed to parse AI response:', content);
+      console.error('Parse error:', parseError.message);
+      throw new Error('Invalid AI response format');
+    }
+    
+    // Validar formato
+    if (responseFormat === 'array') {
+      if (!Array.isArray(suggestions)) {
+        throw new Error('Expected array response');
+      }
+      // Filtrar strings vazias e garantir que são strings
+      suggestions = suggestions.filter(item => typeof item === 'string' && item.trim().length > 0);
+    }
+    
+    if (responseFormat === 'objections') {
+      if (!Array.isArray(suggestions)) {
+        throw new Error('Expected array response');
+      }
+      // Validar cada objeção
+      suggestions = suggestions.filter(item => 
+        item && 
+        typeof item.objection === 'string' && 
+        typeof item.response === 'string' &&
+        item.objection.trim().length > 0 &&
+        item.response.trim().length > 0
+      );
+    }
+    
+    console.log(`✅ Geradas ${suggestions.length} sugestões de ${type} para ${companyName}`);
+    
+    return {
+      success: true,
+      type,
+      suggestions
+    };
+    
+  } catch (error) {
+    console.error('❌ Erro ao gerar sugestões:', error.message);
+    
+    // Retornar fallback em caso de erro
+    const fallbackSuggestions = getSetupFallbackSuggestions(request.body.type, request.body);
+    
+    return {
+      success: false,
+      type: request.body.type,
+      suggestions: fallbackSuggestions,
+      error: error.message,
+      usedFallback: true
+    };
+  }
+});
+
+// ============================================================================
+// API - SETUP PROMPTS MANAGEMENT
+// ============================================================================
 
 // Obter prompts do cliente
 fastify.get('/api/setup/prompts', async (request, reply) => {
