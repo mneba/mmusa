@@ -371,18 +371,19 @@ Be ${toneDesc[data.tone] || toneDesc.friendly}. Keep responses concise (1-2 sent
         // Dados da empresa
         companyName: data.companyName.trim(),
         about: data.about.trim(),
-        products: data.products,
-        differentials: data.differentials,
-        team: data.team,
+        products: data.products || [],
+        differentials: data.differentials || [],
+        team: data.team || [],
         
         // Dados do prompt
         objective: data.objective.trim(),
+        objectiveDetails: '', // Campo obrigatório pelo Firebase
         tone: data.tone || 'friendly',
         assistantName: data.assistantName.trim(),
         objections: [], // Vazio - será preenchido dentro da ferramenta
         
         // Idiomas
-        languages: data.languages,
+        languages: data.languages || ['en'],
         defaultLanguage: data.languages[0] || 'en',
         
         // Prompt gerado
