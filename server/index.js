@@ -1325,18 +1325,21 @@ fastify.post('/api/setup', async (request, reply) => {
     const promptId = `prompt_${Date.now()}`;
     
     // Criar objeto do prompt
+    // NOTA: Não usar FieldValue.serverTimestamp() aqui porque este objeto
+    // vai dentro de um array, e o Firebase não permite serverTimestamp em arrays
+    const now = new Date().toISOString();
     const promptData = {
       id: promptId,
       name: promptName || 'First Contact',
       content: generatedPrompt,
-      objective: objective,
-      objectiveDetails: objectiveDetails,
+      objective: objective || '',
+      objectiveDetails: objectiveDetails || '',
       tone: tone || 'friendly',
       assistantName: assistantName || 'Julia',
       objections: objections || [],
       isDefault: isDefault !== false,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp()
+      createdAt: now,
+      updatedAt: now
     };
     
     // Buscar setup existente
@@ -1776,10 +1779,11 @@ fastify.put('/api/setup/prompts/:promptId', async (request, reply) => {
     }
     
     // Atualizar prompt
+    // NOTA: Não usar FieldValue.serverTimestamp() porque está dentro de array
     prompts[promptIndex] = {
       ...prompts[promptIndex],
       ...updates,
-      updatedAt: FieldValue.serverTimestamp()
+      updatedAt: new Date().toISOString()
     };
     
     // Se está marcando como default, remover dos outros
