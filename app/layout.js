@@ -12,3 +12,17 @@ export default function RootLayout({ children }) {
     </html>
   );
 }
+
+import { AuthProvider } from '@/lib/AuthContext';
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </body>
+    </html>
+  );
+}

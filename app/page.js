@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/AuthContext';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 // ============================================================================
 // CONFIGURAÇÃO
@@ -113,7 +116,9 @@ const translations = {
 // COMPONENTE PRINCIPAL
 // ============================================================================
 
-export default function Dashboard() {
+function DashboardContent() {
+  const router = useRouter();
+  const { user, userProfile, logout } = useAuth();
   // Idioma do sistema (interface)
   const [systemLang, setSystemLang] = useState('en');
   const t = translations[systemLang];
@@ -126,6 +131,12 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+
+  // Verificação de setup
+  const [isCheckingSetup, setIsCheckingSetup] = useState(true);
+  
+  // Menu do usuário
+  const [showUserMenu, setShowUserMenu] = useState(false);
   
   // Filtros
   const [statusFilter, setStatusFilter] = useState('all');
@@ -296,13 +307,15 @@ export default function Dashboard() {
   // ============================================================================
   
   useEffect(() => {
-    fetchLeads();
-    loadObjectives();
-    fetchSettings();
-    fetchQueueStatus();
-    const interval = setInterval(fetchQueueStatus, 3000);
-    return () => clearInterval(interval);
-  }, [fetchLeads, loadObjectives, fetchSettings, fetchQueueStatus]);
+    if (!isCheckingSetup) {
+      fetchLeads();
+      loadObjectives();
+      fetchSettings();
+      fetchQueueStatus();
+      const interval = setInterval(fetchQueueStatus, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [isCheckingSetup, fetchLeads, loadObjectives, fetchSettings, fetchQueueStatus]);
   
   useEffect(() => {
     if (activeTab === 'prompts') fetchPrompts();
@@ -316,6 +329,33 @@ export default function Dashboard() {
       setPromptText(text || '');
     }
   }, [prompts, editingPromptType, editingPromptLang]);
+
+    useEffect(() => {
+    const checkSetup = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/setup`);
+        const result = await response.json();
+        
+        if (!result.isConfigured) {
+          // Setup não feito, redirecionar
+          router.push('/setup');
+          return;
+        }
+        
+        // Setup OK, carregar nome da empresa
+        if (result.data?.companyName) {
+          setCompanyName(result.data.companyName);
+        }
+        
+        setIsCheckingSetup(false);
+      } catch (error) {
+        console.error('Error checking setup:', error);
+        setIsCheckingSetup(false);
+      }
+    };
+    
+    checkSetup();
+  }, [router]);
 
   // ============================================================================
   // HANDLERS - LEADS
@@ -702,6 +742,15 @@ export default function Dashboard() {
   };
 
   // ============================================================================
+  // HANDLERS - AUTH
+  // ============================================================================
+  
+  const handleLogout = async () => {
+    await logout();
+    router.push('/login');
+  };
+
+  // ============================================================================
   // HELPERS
   // ============================================================================
   
@@ -786,13 +835,19 @@ export default function Dashboard() {
     return t.contact.outcomes[outcome] || outcome;
   };
 
+
+// User info
+  const displayName = userProfile?.displayName || user?.displayName || user?.email?.split('@')[0] || 'User';
+  const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+
   // ============================================================================
   // RENDER
   // ============================================================================
   
   return (
     <div className="min-h-screen bg-gray-900 text-white">
-      {/* ===== HEADER ===== */}
+    {/* ===== HEADER COM MENU DE USUÁRIO ===== */}
       <header className="bg-gray-800 border-b border-gray-700 p-4">
         <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
           <div>
@@ -818,6 +873,72 @@ export default function Dashboard() {
                 <span>{t.queue.calling}: {queueStatus.current?.leadName}</span>
               </div>
             )}
+            
+            {/* Menu do Usuário */}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-3 bg-gray-700 hover:bg-gray-600 rounded-xl px-4 py-2 transition-colors"
+              >
+                {user?.photoURL ? (
+                  <img 
+                    src={user.photoURL} 
+                    alt={displayName}
+                    className="w-8 h-8 rounded-full"
+                  />
+                ) : (
+                  <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
+                    {initials}
+                  </div>
+                )}
+                <span className="text-sm font-medium hidden sm:block">{displayName}</span>
+                <svg className={`w-4 h-4 text-gray-400 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              
+              {/* Dropdown Menu */}
+              {showUserMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-10" 
+                    onClick={() => setShowUserMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-gray-700">
+                      <p className="text-sm font-medium truncate">{displayName}</p>
+                      <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+                    </div>
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          setActiveTab('settings');
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 transition-colors flex items-center gap-2"
+                      >
+                        <span>⚙️</span> Settings
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          router.push('/setup?new_prompt=true');
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 transition-colors flex items-center gap-2"
+                      >
+                        <span>🎯</span> New Prompt
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-gray-700 transition-colors flex items-center gap-2"
+                      >
+                        <span>🚪</span> Sign Out
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -1484,5 +1605,16 @@ export default function Dashboard() {
         )}
       </main>
     </div>
+  );
+}
+// ============================================================================
+// COMPONENTE PRINCIPAL COM PROTEÇÃO
+// ============================================================================
+
+export default function Dashboard() {
+  return (
+    <ProtectedRoute>
+      <DashboardContent />
+    </ProtectedRoute>
   );
 }
