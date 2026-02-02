@@ -99,9 +99,10 @@ try {
 const callQueue = {
   queue: [],           // Array de chamadas pendentes
   current: null,       // Chamada atual
-  isProcessing: false, // Se estÃ¡ processando a fila
+  isProcessing: false, // Se está processando a fila
   batchId: null,       // ID do lote atual
-  results: []          // Resultados das chamadas
+  results: [],         // Resultados das chamadas
+  userId: null         // NOVO: userId do batch atual
 };
 
 // Adicionar chamadas Ã  fila
@@ -111,20 +112,21 @@ function addToQueue(calls, batchId) {
   console.log(`ðŸ“‹ ${calls.length} chamadas adicionadas Ã  fila. Total: ${callQueue.queue.length}`);
 }
 
-// Processar prÃ³xima chamada
+// Processar próxima chamada
 async function processNextCall(serverHost) {
   if (callQueue.queue.length === 0) {
     callQueue.isProcessing = false;
     callQueue.current = null;
-    console.log('âœ… Fila de chamadas concluÃ­da!');
+    console.log('✅ Fila de chamadas concluída!');
     
-    // Atualizar batch no Firebase
-    if (db && callQueue.batchId) {
-      await db.collection('batches').doc(callQueue.batchId).update({
-        status: 'completed',
-        completedAt: FieldValue.serverTimestamp(),
-        results: callQueue.results
-      });
+    // NOVO: Atualizar batch na subcollection do usuário
+    if (db && callQueue.batchId && callQueue.userId) {
+      await db.collection('users').doc(callQueue.userId)
+        .collection('batches').doc(callQueue.batchId).update({
+          status: 'completed',
+          completedAt: FieldValue.serverTimestamp(),
+          results: callQueue.results
+        });
     }
     return;
   }
@@ -132,15 +134,16 @@ async function processNextCall(serverHost) {
   callQueue.isProcessing = true;
   callQueue.current = callQueue.queue.shift();
   
-  const { leadId, leadName, phone, lang, leadLanguage, callContext } = callQueue.current;
+  // NOVO: extrair userId da chamada atual
+  const { leadId, leadName, phone, lang, leadLanguage, callContext, userId } = callQueue.current;
   
-  console.log(`ðŸ“ž Iniciando chamada para: ${leadName} (${phone})`);
-  console.log(`   ðŸ“œ Prompt: ${lang?.toUpperCase() || 'EN'}, ðŸ—£ï¸ Conversa: ${leadLanguage?.toUpperCase() || lang?.toUpperCase() || 'EN'}`);
+  console.log(`📞 Iniciando chamada para: ${leadName} (${phone})`);
+  console.log(`   📜 Prompt: ${lang?.toUpperCase() || 'EN'}, 🗣️ Conversa: ${leadLanguage?.toUpperCase() || lang?.toUpperCase() || 'EN'}`);
   
   try {
-    // Fazer chamada via Twilio
+    // NOVO: incluir userId na URL do webhook
     const call = await twilioClient.calls.create({
-      url: `https://${serverHost}/incoming-call?lang=${lang || 'en'}&leadLanguage=${leadLanguage || lang || 'en'}&leadId=${leadId}&leadName=${encodeURIComponent(leadName)}&callContext=${encodeURIComponent(callContext || '')}`,
+      url: `https://${serverHost}/incoming-call?lang=${lang || 'en'}&leadLanguage=${leadLanguage || lang || 'en'}&leadId=${leadId}&leadName=${encodeURIComponent(leadName)}&callContext=${encodeURIComponent(callContext || '')}&userId=${userId || ''}`,
       to: phone,
       from: TWILIO_PHONE_NUMBER,
       statusCallback: `https://${serverHost}/call-status-batch?batchId=${callQueue.batchId}&leadId=${leadId}`,
@@ -153,7 +156,7 @@ async function processNextCall(serverHost) {
     console.log(`   CallSid: ${call.sid}`);
     
   } catch (error) {
-    console.error(`âŒ Erro ao fazer chamada para ${phone}:`, error.message);
+    console.error(`❌ Erro ao fazer chamada para ${phone}:`, error.message);
     callQueue.results.push({
       leadId,
       leadName,
@@ -162,7 +165,7 @@ async function processNextCall(serverHost) {
       error: error.message
     });
     
-    // Continuar para prÃ³xima chamada apÃ³s falha
+    // Continuar para próxima chamada após falha
     setTimeout(() => processNextCall(serverHost), 1000);
   }
 }
@@ -181,27 +184,28 @@ let companyNameCache = null;
 let companyNameCacheTime = 0;
 const COMPANY_NAME_CACHE_TTL = 5 * 60 * 1000;
 
-// Carregar nome da empresa (dinÃ¢mico)
-async function getCompanyName() {
-  // Verificar cache
-  if (companyNameCache && (Date.now() - companyNameCacheTime) < COMPANY_NAME_CACHE_TTL) {
-    return companyNameCache;
+// Carregar nome da empresa (por usuário)
+async function getCompanyName(userId = null) {
+  // Se não tem userId, usar fallback
+  if (!userId) {
+    return COMPANY_NAME;
   }
   
-  if (!db) return COMPANY_NAME; // Fallback para env var
+  if (!db) return COMPANY_NAME;
   
   try {
-    const doc = await db.collection('settings').doc('company').get();
+    // Buscar do setup do usuário
+    const doc = await db.collection('users').doc(userId)
+      .collection('setup').doc('config').get();
+    
     if (doc.exists && doc.data().companyName) {
-      companyNameCache = doc.data().companyName;
-      companyNameCacheTime = Date.now();
-      console.log('ðŸ¢ Nome da empresa carregado:', companyNameCache);
-      return companyNameCache;
+      console.log(`🏢 Nome da empresa carregado para user ${userId.substring(0, 8)}:`, doc.data().companyName);
+      return doc.data().companyName;
     }
     return COMPANY_NAME; // Fallback
   } catch (error) {
-    console.error('âŒ Erro ao carregar nome da empresa:', error.message);
-    return COMPANY_NAME; // Fallback
+    console.error('❌ Erro ao carregar nome da empresa:', error.message);
+    return COMPANY_NAME;
   }
 }
 
@@ -245,12 +249,13 @@ async function savePrompts(prompts) {
   }
 }
 
-// Buscar lead pelo telefone
-async function getLeadByPhone(phone) {
-  if (!db) return null;
+// Buscar lead pelo telefone (por usuário)
+async function getLeadByPhone(phone, userId) {
+  if (!db || !userId) return null;
   
   try {
-    const snapshot = await db.collection('leads')
+    const snapshot = await db.collection('users').doc(userId)
+      .collection('leads')
       .where('phone', '==', phone)
       .limit(1)
       .get();
@@ -259,31 +264,36 @@ async function getLeadByPhone(phone) {
     const doc = snapshot.docs[0];
     return { id: doc.id, ...doc.data() };
   } catch (error) {
-    console.error('âŒ Erro ao buscar lead:', error.message);
+    console.error('❌ Erro ao buscar lead:', error.message);
     return null;
   }
 }
 
+
 // Buscar lead por ID
-async function getLeadById(leadId) {
-  if (!db) return null;
+// Buscar lead por ID (por usuário)
+async function getLeadById(leadId, userId) {
+  if (!db || !userId) return null;
   
   try {
-    const doc = await db.collection('leads').doc(leadId).get();
+    const doc = await db.collection('users').doc(userId)
+      .collection('leads').doc(leadId).get();
+    
     if (!doc.exists) return null;
     return { id: doc.id, ...doc.data() };
   } catch (error) {
-    console.error('âŒ Erro ao buscar lead:', error.message);
+    console.error('❌ Erro ao buscar lead:', error.message);
     return null;
   }
 }
 
-// Criar registro de chamada
-async function createCallRecord(leadId, callData) {
-  if (!db) return null;
+// Criar registro de chamada (por usuário)
+async function createCallRecord(leadId, callData, userId) {
+  if (!db || !userId) return null;
   
   try {
-    const callRef = await db.collection('leads').doc(leadId)
+    const callRef = await db.collection('users').doc(userId)
+      .collection('leads').doc(leadId)
       .collection('calls').add({
         ...callData,
         startedAt: FieldValue.serverTimestamp(),
@@ -292,17 +302,18 @@ async function createCallRecord(leadId, callData) {
       });
     return callRef.id;
   } catch (error) {
-    console.error('âŒ Erro ao criar registro de chamada:', error.message);
+    console.error('❌ Erro ao criar registro de chamada:', error.message);
     return null;
   }
 }
 
-// Adicionar Ã  transcriÃ§Ã£o
-async function addToTranscript(leadId, callId, role, text) {
-  if (!db || !leadId || !callId) return;
+// Adicionar à transcrição (por usuário)
+async function addToTranscript(leadId, callId, role, text, userId) {
+  if (!db || !leadId || !callId || !userId) return;
   
   try {
-    await db.collection('leads').doc(leadId)
+    await db.collection('users').doc(userId)
+      .collection('leads').doc(leadId)
       .collection('calls').doc(callId)
       .update({
         transcript: FieldValue.arrayUnion({
@@ -312,16 +323,18 @@ async function addToTranscript(leadId, callId, role, text) {
         })
       });
   } catch (error) {
-    console.error('âŒ Erro ao salvar transcriÃ§Ã£o:', error.message);
+    console.error('❌ Erro ao salvar transcrição:', error.message);
   }
 }
 
-// Finalizar chamada
-async function finalizeCall(leadId, callId, duration, summary, intent) {
-  if (!db || !leadId || !callId) return;
+// Finalizar chamada (por usuário)
+async function finalizeCall(leadId, callId, duration, summary, intent, userId) {
+  if (!db || !leadId || !callId || !userId) return;
   
   try {
-    await db.collection('leads').doc(leadId)
+    // Atualizar registro da chamada
+    await db.collection('users').doc(userId)
+      .collection('leads').doc(leadId)
       .collection('calls').doc(callId)
       .update({
         endedAt: FieldValue.serverTimestamp(),
@@ -331,15 +344,17 @@ async function finalizeCall(leadId, callId, duration, summary, intent) {
         intent: intent || 'unknown'
       });
     
-    await db.collection('leads').doc(leadId).update({
-      lastContactAt: FieldValue.serverTimestamp(),
-      lastIntent: intent || 'unknown',
-      totalCalls: FieldValue.increment(1)
-    });
+    // Atualizar lead
+    await db.collection('users').doc(userId)
+      .collection('leads').doc(leadId).update({
+        lastContactAt: FieldValue.serverTimestamp(),
+        lastIntent: intent || 'unknown',
+        totalCalls: FieldValue.increment(1)
+      });
     
-    console.log(`ðŸ’¾ Chamada finalizada: ${callId} - IntenÃ§Ã£o: ${intent}`);
+    console.log(`💾 Chamada finalizada: ${callId} - Intenção: ${intent}`);
   } catch (error) {
-    console.error('âŒ Erro ao finalizar chamada:', error.message);
+    console.error('❌ Erro ao finalizar chamada:', error.message);
   }
 }
 
@@ -619,6 +634,64 @@ fastify.get('/', async (request, reply) => {
   };
 });
 
+
+// ============================================================================
+// MIDDLEWARE DE AUTENTICAÇÃO (MULTI-TENANCY)
+// ============================================================================
+
+// Função para extrair e validar userId
+const extractUserId = (request) => {
+  // Tentar header primeiro
+  const userId = request.headers['x-user-id'];
+  
+  if (userId && userId.trim().length > 0) {
+    return userId.trim();
+  }
+  
+  return null;
+};
+
+// Hook que roda antes de todas as requisições
+fastify.addHook('preHandler', async (request, reply) => {
+  // Rotas públicas que NÃO precisam de autenticação
+  const publicRoutes = [
+    '/',                    // Health check
+    '/incoming-call',       // Webhook Twilio
+    '/call-status',         // Callback Twilio
+    '/call-status-batch',   // Callback Twilio batch
+    '/media-stream'         // WebSocket Twilio
+  ];
+  
+  // Verificar se é rota pública
+  const isPublicRoute = publicRoutes.some(route => 
+    request.url === route || request.url.startsWith(route + '?')
+  );
+  
+  if (isPublicRoute) {
+    return; // Permitir sem auth
+  }
+  
+  // Rotas /api/* precisam de autenticação
+  if (request.url.startsWith('/api/')) {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return reply.status(401).send({ 
+        error: 'Unauthorized', 
+        message: 'Header x-user-id is required' 
+      });
+    }
+    
+    // Anexar userId ao request para uso nas rotas
+    request.userId = userId;
+    
+    console.log(`🔐 Request autenticado: ${request.method} ${request.url} | User: ${userId.substring(0, 8)}...`);
+  }
+});
+
+console.log('✅ Middleware de autenticação configurado');
+
+
 // ============================================================================
 // WEBHOOK TWILIO - CHAMADAS
 // ============================================================================
@@ -628,7 +701,8 @@ fastify.all('/incoming-call', async (request, reply) => {
   const callSid = request.body?.CallSid || 'unknown';
   const from = request.body?.From || 'unknown';
   const to = request.body?.To || 'unknown';
-  
+  const userId = request.query?.userId || null;
+
   // lang = idioma do PROMPT (script)
   // leadLanguage = idioma que o LEAD fala (para a conversa)
   const lang = request.query?.lang || 'en';
@@ -661,6 +735,7 @@ fastify.all('/incoming-call', async (request, reply) => {
       <Parameter name="leadId" value="${leadId || ''}" />
       <Parameter name="leadName" value="${leadName || ''}" />
       <Parameter name="callContext" value="${callContext || ''}" />
+      <Parameter name="userId" value="${userId || ''}" />
     </Stream>
   </Connect>
 </Response>`;
@@ -711,6 +786,8 @@ fastify.post('/api/leads', async (request, reply) => {
     return reply.status(503).send({ error: 'Firebase not configured' });
   }
   
+  const { userId } = request; // ← ADICIONAR
+  
   try {
     const body = request.body;
     const { phone } = body;
@@ -719,7 +796,7 @@ fastify.post('/api/leads', async (request, reply) => {
       return reply.status(400).send({ error: 'Phone is required' });
     }
     
-    // Campos permitidos (todos os campos do frontend v13+)
+    // Campos permitidos
     const allowedFields = [
       'name', 'phone', 'email', 'source', 'notes', 'callContext',
       'status', 'language', 'promptLang',
@@ -728,7 +805,6 @@ fastify.post('/api/leads', async (request, reply) => {
       'nextStep', 'aiSummary'
     ];
     
-    // Filtrar apenas campos definidos (nÃ£o undefined)
     const filterDefined = (obj, fields) => {
       const result = {};
       for (const field of fields) {
@@ -739,20 +815,25 @@ fastify.post('/api/leads', async (request, reply) => {
       return result;
     };
     
-    const existing = await getLeadByPhone(phone);
+    // MUDANÇA: Buscar com userId
+    const existing = await getLeadByPhone(phone, userId);
     
     if (existing) {
-      // UPDATE: merge campos recebidos
+      // UPDATE
       const updateData = {
         ...filterDefined(body, allowedFields),
         updatedAt: FieldValue.serverTimestamp()
       };
       
-      await db.collection('leads').doc(existing.id).update(updateData);
-      console.log(`âœ… Lead atualizado (POST): ${existing.id}`, Object.keys(updateData));
+      // MUDANÇA: Path com userId
+      await db.collection('users').doc(userId)
+        .collection('leads').doc(existing.id)
+        .update(updateData);
+      
+      console.log(`✅ Lead atualizado (POST): ${existing.id}`, Object.keys(updateData));
       return { id: existing.id, updated: true };
     } else {
-      // CREATE: novo lead com todos os campos
+      // CREATE
       const createData = {
         name: body.name || '',
         phone,
@@ -778,12 +859,16 @@ fastify.post('/api/leads', async (request, reply) => {
         totalCalls: 0
       };
       
-      const docRef = await db.collection('leads').add(createData);
-      console.log(`âœ… Lead criado: ${docRef.id}`, Object.keys(createData));
+      // MUDANÇA: Path com userId
+      const docRef = await db.collection('users').doc(userId)
+        .collection('leads')
+        .add(createData);
+      
+      console.log(`✅ Lead criado: ${docRef.id}`);
       return { id: docRef.id, created: true };
     }
   } catch (error) {
-    console.error('âŒ Erro ao criar lead:', error);
+    console.error('❌ Erro ao criar lead:', error);
     return reply.status(500).send({ error: error.message });
   }
 });
@@ -816,7 +901,12 @@ fastify.put('/api/leads/:leadId', async (request, reply) => {
       }
     }
     
-    await db.collection('leads').doc(leadId).update(updateData);
+    const { userId } = request; // ← ADICIONAR no início
+
+    await db.collection('users').doc(userId)
+      .collection('leads').doc(leadId)
+      .update(updateData);
+
     console.log(`âœ… Lead atualizado (PUT): ${leadId}`, Object.keys(updateData));
     
     return { id: leadId, updated: true };
@@ -832,8 +922,12 @@ fastify.get('/api/leads', async (request, reply) => {
     return reply.status(503).send({ error: 'Firebase not configured' });
   }
   
+  const { userId } = request; // ← ADICIONAR
+  
   try {
-    const snapshot = await db.collection('leads')
+    // MUDANÇA: Buscar da subcollection do usuário
+    const snapshot = await db.collection('users').doc(userId)
+      .collection('leads')
       .orderBy('createdAt', 'desc')
       .limit(500)
       .get();
@@ -849,15 +943,17 @@ fastify.get('/api/leads', async (request, reply) => {
   }
 });
 
-// Buscar lead especÃ­fico
+// Buscar lead específico
 fastify.get('/api/leads/:leadId', async (request, reply) => {
   if (!db) {
     return reply.status(503).send({ error: 'Firebase not configured' });
   }
   
+  const { userId } = request; // NOVO: userId do middleware
+  
   try {
     const { leadId } = request.params;
-    const lead = await getLeadById(leadId);
+    const lead = await getLeadById(leadId, userId); // NOVO: passa userId
     
     if (!lead) {
       return reply.status(404).send({ error: 'Lead not found' });
@@ -875,9 +971,16 @@ fastify.delete('/api/leads/:leadId', async (request, reply) => {
     return reply.status(503).send({ error: 'Firebase not configured' });
   }
   
+  const { userId } = request; // NOVO: userId do middleware
+  
   try {
     const { leadId } = request.params;
-    await db.collection('leads').doc(leadId).delete();
+    
+    // NOVO: deletar da subcollection do usuário
+    await db.collection('users').doc(userId)
+      .collection('leads').doc(leadId)
+      .delete();
+    
     return { deleted: true };
   } catch (error) {
     return reply.status(500).send({ error: error.message });
@@ -890,10 +993,14 @@ fastify.get('/api/leads/:leadId/calls', async (request, reply) => {
     return reply.status(503).send({ error: 'Firebase not configured' });
   }
   
+  const { userId } = request; // NOVO: userId do middleware
+  
   try {
     const { leadId } = request.params;
     
-    const snapshot = await db.collection('leads').doc(leadId)
+    // NOVO: buscar da subcollection do usuário
+    const snapshot = await db.collection('users').doc(userId)
+      .collection('leads').doc(leadId)
       .collection('calls')
       .orderBy('startedAt', 'desc')
       .get();
@@ -913,11 +1020,13 @@ fastify.get('/api/leads/:leadId/calls', async (request, reply) => {
 // API - CHAMADAS
 // ============================================================================
 
-// Fazer chamada Ãºnica
+// Fazer chamada única
 fastify.post('/api/call', async (request, reply) => {
   if (!twilioClient) {
     return reply.status(503).send({ error: 'Twilio not configured' });
   }
+  
+  const { userId } = request; // NOVO: userId do middleware
   
   try {
     // lang = idioma do PROMPT, leadLanguage = idioma que o lead FALA
@@ -934,7 +1043,7 @@ fastify.post('/api/call', async (request, reply) => {
     // Buscar dados completos do lead do Firebase
     let leadData = null;
     if (leadId && db) {
-      const lead = await getLeadById(leadId);
+      const lead = await getLeadById(leadId, userId); // NOVO: passa userId
       if (lead) {
         leadData = {
           name: lead.name || '',
@@ -947,18 +1056,19 @@ fastify.post('/api/call', async (request, reply) => {
           notes: lead.notes || '',
           aiSummary: lead.aiSummary || ''
         };
-        console.log(`ðŸ“‹ Dados do lead carregados:`, JSON.stringify(leadData));
+        console.log(`📋 Dados do lead carregados:`, JSON.stringify(leadData));
       }
     }
     
-    console.log(`ðŸ“ž Iniciando chamada: ${leadName || phone}`);
-    console.log(`   ðŸ“œ Prompt: ${promptLang.toUpperCase()}, ðŸ—£ï¸ Conversa: ${conversationLang.toUpperCase()}`);
+    console.log(`📞 Iniciando chamada: ${leadName || phone}`);
+    console.log(`   📜 Prompt: ${promptLang.toUpperCase()}, 🗣️ Conversa: ${conversationLang.toUpperCase()}`);
     
     // Encode leadData como JSON para passar via URL
     const leadDataParam = leadData ? encodeURIComponent(JSON.stringify(leadData)) : '';
     
+    // NOVO: incluir userId na URL do webhook
     const call = await twilioClient.calls.create({
-      url: `https://${host}/incoming-call?lang=${promptLang}&leadLanguage=${conversationLang}&leadId=${leadId || ''}&leadName=${encodeURIComponent(leadName || '')}&callContext=${encodeURIComponent(callContext || '')}&leadData=${leadDataParam}`,
+      url: `https://${host}/incoming-call?lang=${promptLang}&leadLanguage=${conversationLang}&leadId=${leadId || ''}&leadName=${encodeURIComponent(leadName || '')}&callContext=${encodeURIComponent(callContext || '')}&leadData=${leadDataParam}&userId=${userId}`,
       to: phone,
       from: TWILIO_PHONE_NUMBER,
       statusCallback: `https://${host}/call-status`,
@@ -976,15 +1086,18 @@ fastify.post('/api/call', async (request, reply) => {
   }
 });
 
-// Fazer chamadas em sÃ©rie (batch)
+
+// Fazer chamadas em série (batch)
 fastify.post('/api/call/batch', async (request, reply) => {
   if (!twilioClient) {
     return reply.status(503).send({ error: 'Twilio not configured' });
   }
   
+  const { userId } = request; // NOVO: userId do middleware
+  
   if (callQueue.isProcessing) {
     return reply.status(409).send({ 
-      error: 'JÃ¡ existe uma fila de chamadas em andamento',
+      error: 'Já existe uma fila de chamadas em andamento',
       queue: {
         pending: callQueue.queue.length,
         current: callQueue.current?.leadName
@@ -1002,36 +1115,41 @@ fastify.post('/api/call/batch', async (request, reply) => {
     // Criar batch ID
     const batchId = `batch_${Date.now()}`;
     
-    // Salvar batch no Firebase
+    // NOVO: Salvar batch na subcollection do usuário
     if (db) {
-      await db.collection('batches').doc(batchId).set({
-        createdAt: FieldValue.serverTimestamp(),
-        totalCalls: leads.length,
-        status: 'processing',
-        leads: leads.map(l => ({
-          leadId: l.leadId,
-          leadName: l.leadName,
-          phone: l.phone
-        }))
-      });
+      await db.collection('users').doc(userId)
+        .collection('batches').doc(batchId).set({
+          createdAt: FieldValue.serverTimestamp(),
+          totalCalls: leads.length,
+          status: 'processing',
+          leads: leads.map(l => ({
+            leadId: l.leadId,
+            leadName: l.leadName,
+            phone: l.phone
+          }))
+        });
     }
     
     // Preparar chamadas para fila
-    // lang = idioma do PROMPT, leadLanguage = idioma que o lead FALA
+    // NOVO: incluir userId em cada chamada
     const calls = leads.map(lead => ({
       leadId: lead.leadId,
       leadName: lead.leadName,
       phone: lead.phone,
       lang: lead.lang || lang || 'en',
       leadLanguage: lead.leadLanguage || lead.lang || lang || 'en',
-      callContext: lead.callContext || ''
+      callContext: lead.callContext || '',
+      userId: userId // NOVO: userId para cada chamada
     }));
     
     // Resetar resultados
     callQueue.results = [];
     
-    // Adicionar Ã  fila
+    // Adicionar à fila
     addToQueue(calls, batchId);
+    
+    // NOVO: Passar userId para processNextCall
+    callQueue.userId = userId;
     
     // Iniciar processamento
     const host = request.headers.host;
@@ -1048,6 +1166,7 @@ fastify.post('/api/call/batch', async (request, reply) => {
     return reply.status(500).send({ error: error.message });
   }
 });
+
 
 // Status da fila
 fastify.get('/api/call/queue', async (request, reply) => {
@@ -1200,18 +1319,15 @@ fastify.get('/api/settings', async (request, reply) => {
     return reply.status(503).send({ error: 'Firebase not configured' });
   }
   
+  const { userId } = request; // NOVO: userId do middleware
+  
   try {
-    // Verificar cache
-    if (settingsCache && (Date.now() - settingsCacheTime) < SETTINGS_CACHE_TTL) {
-      return settingsCache;
-    }
+    // NOVO: buscar do setup do usuário
+    const doc = await db.collection('users').doc(userId)
+      .collection('setup').doc('config').get();
     
-    const doc = await db.collection('settings').doc('company').get();
-    if (doc.exists) {
-      settingsCache = doc.data();
-      settingsCacheTime = Date.now();
-      console.log('📋 Settings carregados:', settingsCache);
-      return settingsCache;
+    if (doc.exists && doc.data().companyName) {
+      return { companyName: doc.data().companyName };
     }
     
     // Retornar default se não existir
@@ -1222,11 +1338,14 @@ fastify.get('/api/settings', async (request, reply) => {
   }
 });
 
+
 // Salvar settings
 fastify.put('/api/settings', async (request, reply) => {
   if (!db) {
     return reply.status(503).send({ error: 'Firebase not configured' });
   }
+  
+  const { userId } = request; // NOVO: userId do middleware
   
   try {
     const { companyName } = request.body;
@@ -1235,22 +1354,22 @@ fastify.put('/api/settings', async (request, reply) => {
       return reply.status(400).send({ error: 'Company name is required' });
     }
     
-    await db.collection('settings').doc('company').set({
-      companyName: companyName.trim(),
-      updatedAt: FieldValue.serverTimestamp()
-    }, { merge: true });
+    // NOVO: salvar no setup do usuário
+    await db.collection('users').doc(userId)
+      .collection('setup').doc('config')
+      .set({
+        companyName: companyName.trim(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
     
-    // Invalidar cache
-    settingsCache = null;
-    settingsCacheTime = 0;
-    
-    console.log('✅ Settings salvos:', { companyName });
+    console.log('✅ Settings salvos para user:', userId.substring(0, 8));
     return { success: true, companyName: companyName.trim() };
   } catch (error) {
     console.error('❌ Erro ao salvar settings:', error.message);
     return reply.status(500).send({ error: error.message });
   }
 });
+
 
 // ============================================================================
 // API - SETUP (Onboarding e Criação de Prompts)
@@ -1262,8 +1381,12 @@ fastify.get('/api/setup', async (request, reply) => {
     return reply.status(503).send({ error: 'Firebase not configured' });
   }
   
+  const { userId } = request; // ← NOVO: Extraído pelo middleware
+  
   try {
-    const doc = await db.collection('settings').doc('setup').get();
+    // MUDANÇA: Buscar do setup do usuário
+    const doc = await db.collection('users').doc(userId)
+      .collection('setup').doc('config').get();
     
     if (!doc.exists) {
       return { 
@@ -1321,6 +1444,8 @@ fastify.post('/api/setup', async (request, reply) => {
       return reply.status(400).send({ error: 'Company name is required' });
     }
     
+    const { userId } = request; 
+
     // Gerar ID único para o prompt
     const promptId = `prompt_${Date.now()}`;
     
@@ -1343,7 +1468,8 @@ fastify.post('/api/setup', async (request, reply) => {
     };
     
     // Buscar setup existente
-    const existingDoc = await db.collection('settings').doc('setup').get();
+    const existingDoc = await db.collection('users').doc(userId)
+  .collection('setup').doc('config').get();
     const existingData = existingDoc.exists ? existingDoc.data() : null;
     
     // Verificar limite de 3 prompts
@@ -1400,13 +1526,13 @@ fastify.post('/api/setup', async (request, reply) => {
     }
     
     // Salvar no Firebase
-    await db.collection('settings').doc('setup').set(setupData, { merge: true });
-    
-    // Também atualizar o nome da empresa no settings/company (compatibilidade)
-    await db.collection('settings').doc('company').set({
-      companyName: setupData.companyName,
-      updatedAt: FieldValue.serverTimestamp()
-    }, { merge: true });
+    // Salvar setup do usuário
+    await db.collection('users').doc(userId)
+      .collection('setup').doc('config')
+      .set(setupData, { merge: true });
+
+    // NÃO precisa mais salvar em settings/company separado
+    // O companyName já está dentro do setup do usuário
     
     // Invalidar caches
     settingsCache = null;
@@ -1710,8 +1836,11 @@ fastify.get('/api/setup/prompts', async (request, reply) => {
     return reply.status(503).send({ error: 'Firebase not configured' });
   }
   
+  const { userId } = request; // NOVO: userId do middleware
+  
   try {
-    const doc = await db.collection('settings').doc('setup').get();
+    const doc = await db.collection('users').doc(userId)
+      .collection('setup').doc('config').get();
     
     if (!doc.exists) {
       return { prompts: [] };
@@ -1732,9 +1861,12 @@ fastify.get('/api/setup/prompts/:promptId', async (request, reply) => {
     return reply.status(503).send({ error: 'Firebase not configured' });
   }
   
+  const { userId } = request; // NOVO: userId do middleware
+  
   try {
     const { promptId } = request.params;
-    const doc = await db.collection('settings').doc('setup').get();
+    const doc = await db.collection('users').doc(userId)
+      .collection('setup').doc('config').get();
     
     if (!doc.exists) {
       return reply.status(404).send({ error: 'Setup not found' });
@@ -1753,18 +1885,21 @@ fastify.get('/api/setup/prompts/:promptId', async (request, reply) => {
     return reply.status(500).send({ error: error.message });
   }
 });
-
 // Atualizar prompt específico
+
 fastify.put('/api/setup/prompts/:promptId', async (request, reply) => {
   if (!db) {
     return reply.status(503).send({ error: 'Firebase not configured' });
   }
   
+  const { userId } = request; // NOVO: userId do middleware
+  
   try {
     const { promptId } = request.params;
     const updates = request.body;
     
-    const doc = await db.collection('settings').doc('setup').get();
+    const doc = await db.collection('users').doc(userId)
+      .collection('setup').doc('config').get();
     
     if (!doc.exists) {
       return reply.status(404).send({ error: 'Setup not found' });
@@ -1793,11 +1928,12 @@ fastify.put('/api/setup/prompts/:promptId', async (request, reply) => {
       });
     }
     
-    // Salvar
-    await db.collection('settings').doc('setup').update({
-      prompts,
-      updatedAt: FieldValue.serverTimestamp()
-    });
+    // Salvar - NOVO: path do usuário
+    await db.collection('users').doc(userId)
+      .collection('setup').doc('config').update({
+        prompts,
+        updatedAt: FieldValue.serverTimestamp()
+      });
     
     console.log('✅ Prompt atualizado:', promptId);
     
@@ -1818,10 +1954,13 @@ fastify.delete('/api/setup/prompts/:promptId', async (request, reply) => {
     return reply.status(503).send({ error: 'Firebase not configured' });
   }
   
+  const { userId } = request; // NOVO: userId do middleware
+  
   try {
     const { promptId } = request.params;
     
-    const doc = await db.collection('settings').doc('setup').get();
+    const doc = await db.collection('users').doc(userId)
+      .collection('setup').doc('config').get();
     
     if (!doc.exists) {
       return reply.status(404).send({ error: 'Setup not found' });
@@ -1848,11 +1987,12 @@ fastify.delete('/api/setup/prompts/:promptId', async (request, reply) => {
       prompts[0].isDefault = true;
     }
     
-    // Salvar
-    await db.collection('settings').doc('setup').update({
-      prompts,
-      updatedAt: FieldValue.serverTimestamp()
-    });
+    // Salvar - NOVO: path do usuário
+    await db.collection('users').doc(userId)
+      .collection('setup').doc('config').update({
+        prompts,
+        updatedAt: FieldValue.serverTimestamp()
+      });
     
     console.log('✅ Prompt deletado:', promptId);
     
@@ -1929,6 +2069,7 @@ wss.on('connection', (twilioWs, request) => {
   console.log('ðŸ”Œ WebSocket Twilio CONECTADO!');
   console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
   
+  let streamUserId = null;
   let streamSid = null;
   let callSid = null;
   let openAiWs = null;
@@ -2140,6 +2281,7 @@ wss.on('connection', (twilioWs, request) => {
           leadId = data.start.customParameters?.leadId || null;
           leadName = data.start.customParameters?.leadName || null;
           callContext = data.start.customParameters?.callContext || null;
+          streamUserId = data.start.customParameters?.userId || null; 
           
           console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
           console.log('ðŸŽ¬ STREAM INICIADO!');
@@ -2175,7 +2317,7 @@ wss.on('connection', (twilioWs, request) => {
               promptLang: promptLang,
               language: leadLang,
               callContext: callContext || ''
-            });
+            }, streamUserId);
             console.log(`   ðŸ’¾ Registro criado: ${callDbId}`);
           }
           console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
